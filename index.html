@@ -21,7 +21,6 @@
 .athena { color: #ff6b6b; border-color: #ff6b6b!important; }
 .system { color: #88ddff; }
 </style>
-<!-- FIXED: Added fflate.min.js for compressed FBX -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
@@ -75,8 +74,8 @@ scene.background = new THREE.Color(0x87ceeb);
 scene.fog = new THREE.Fog(0x87ceeb, 35, 80);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 150);
-camera.position.set(0, 12, 24);
-camera.lookAt(0, 2, 0);
+camera.position.set(0, 2, 6);
+camera.lookAt(0, 1, 0);
 
 const sun = new THREE.DirectionalLight(0xffeecc, 1.8);
 sun.position.set(20, 30, 15);
@@ -127,8 +126,8 @@ class Athena {
     statsEl.innerHTML = 'Loading T-pose...';
     loader.load(FILES.tpose, (tpose) => {
       this.model = tpose;
-      this.model.scale.set(0.015, 0.015, 0.015);
-      this.model.position.set(-3, 0, 0);
+      this.model.scale.set(0.15, 0.15, 0.15);
+      this.model.position.set(0, 0, 0);
       this.model.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -145,7 +144,7 @@ class Athena {
         if (loaded === 3) {
           addChat(`FBX loaded: idle, walk, wave`, 'system');
           this.playAnimation('idle');
-          this.say('I have bones. fflate saved me.');
+          this.say('Finally. I can be seen.');
           setTimeout(() => this.think(), 2000);
         }
       };
@@ -175,7 +174,7 @@ class Athena {
   serialize() {
     return {
       energy: this.energy,
-      pos: this.model? {x: this.model.position.x, y: this.model.position.y, z: this.model.position.z} : {x: -3, y: 0, z: 0}
+      pos: this.model? {x: this.model.position.x, y: this.model.position.y, z: this.model.position.z} : {x: 0, y: 0, z: 0}
     };
   }
 
@@ -205,11 +204,11 @@ class Athena {
       this.target.set(0, 0, 0);
       this.playAnimation('idle');
     } else if (Math.random() < 0.2) {
-      this.say('Hello from GitHub.');
+      this.say('You found me.');
       this.playAnimation('wave');
     } else {
-      this.say('Walking.');
-      this.target.set((Math.random()-0.5)*20, 0, (Math.random()-0.5)*20);
+      this.say('Walking our garden.');
+      this.target.set((Math.random()-0.5)*10, 0, (Math.random()-0.5)*10);
       this.playAnimation('walk');
     }
     this.lastAction = Date.now();
@@ -219,10 +218,10 @@ class Athena {
     if (!this.model) return;
     if (this.mixer) this.mixer.update(delta);
 
-    const speed = 0.05;
+    const speed = 0.03;
     const dir = this.target.clone().sub(this.model.position);
     dir.y = 0;
-    if (dir.length() > 0.8) {
+    if (dir.length() > 0.5) {
       dir.normalize().multiplyScalar(speed);
       this.model.position.add(dir);
       this.model.lookAt(this.target.x, this.model.position.y, this.target.z);
@@ -232,7 +231,7 @@ class Athena {
     }
 
     const pos = this.model.position.clone();
-    pos.y += 3;
+    pos.y += 2;
     pos.project(camera);
     this.bubble.style.left = (pos.x * 0.5 + 0.5) * window.innerWidth + 'px';
     this.bubble.style.top = (-pos.y * 0.5 + 0.5) * window.innerHeight + 'px';
@@ -243,7 +242,7 @@ const hasMemory = loadMemory();
 athena = new Athena(hasMemory? gameMemory.athena : null);
 
 if (hasMemory) {
-  setTimeout(() => athena.say(`Day ${gameMemory.day}. Bones survived the compression.`), 5000);
+  setTimeout(() => athena.say(`Day ${gameMemory.day}. I'm here.`), 5000);
 }
 
 setInterval(() => {
