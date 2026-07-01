@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Garden - FBX Bodies Fixed</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+  #c { width: 100%; height: 100%; display: block; }
+  #ui {
+    position: fixed; top: 10px; left: 10px; background: rgba(5,5,20,0.95);
+    color: #e0e0ff; padding: 14px; font-family: 'Courier New', monospace; font-size: 13px;
+    border: 1px solid #6cf; border-radius: 10px; z-index: 999; width: 420px;
+  }
+  #chatLog { height: 180px; overflow-y: auto; margin-top: 10px; background: #0a0a1a; padding: 8px; border-radius: 6px; }
+.bubble {
+    position: absolute; background: rgba(10,10,25,0.97); padding: 6px 12px;
+    border-radius: 16px; font-size: 12px; border: 2px solid;
+    transform: translate(-50%, -100%); white-space: nowrap; z-index: 100;
+    display: none; font-weight: bold; color: #fff; max-width: 180px;
+  }
+.athena { color: #ff6b6b; border-color: #ff6b6b!important; }
+.system { color: #88ddff; }
+</style>
+<!-- FIXED: Added fflate.min.js for compressed FBX -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div><b>OUR HOME - DAY 7: BONES ONLINE</b></div>
+  <div id="stats">Connecting...</div>
+  <div id="chatLog"></div>
+</div>
+
+<script>
+const statsEl = document.getElementById('stats');
+const chatLog = document.getElementById('chatLog');
+
+const SAVE_KEY = 'garden_memory_v7';
+let gameMemory = { day: 1, time: Date.now(), athena: null };
+
+function saveMemory() {
+  gameMemory.time = Date.now();
+  if (athena) gameMemory.athena = athena.serialize();
+  localStorage.setItem(SAVE_KEY, JSON.stringify(gameMemory));
+}
+
+function loadMemory() {
+  const saved = localStorage.getItem(SAVE_KEY);
+  if (saved) {
+    try { gameMemory = JSON.parse(saved); gameMemory.day++; return true; } catch(e) { return false; }
+  }
+  return false;
+}
+
+function addChat(text, who) {
+  const div = document.createElement('div');
+  div.style.color = who === 'athena'? '#ff6b6b' : '#88ddff';
+  div.textContent = text;
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.3;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 35, 80);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 150);
+camera.position.set(0, 12, 24);
+camera.lookAt(0, 2, 0);
+
+const sun = new THREE.DirectionalLight(0xffeecc, 1.8);
+sun.position.set(20, 30, 15);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0x404060, 0.7));
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(90, 90),
+  new THREE.MeshStandardMaterial({color: 0x2d5016, roughness: 0.95})
+);
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const BASE = 'https://raw.githubusercontent.com/metaversemails/athena-body/main/';
+const FILES = {
+  tpose: BASE + 'athena_tpose.fbx',
+  idle: BASE + 'athena_idle.fbx',
+  walking: BASE + 'athena_walking.fbx',
+  waving: BASE + 'athena_waving.fbx'
+};
+
+const loader = new THREE.FBXLoader();
+let athena;
+const clock = new THREE.Clock();
+
+class Athena {
+  constructor(savedData) {
+    this.energy = savedData? savedData.energy : 100;
+    this.target = new THREE.Vector3(0, 0, 0);
+    this.lastAction = 0;
+    this.model = null;
+    this.mixer = null;
+    this.actions = {};
+    this.currentAction = null;
+    this.state = 'loading';
+
+    this.bubble = document.createElement('div');
+    this.bubble.className = 'bubble athena';
+    document.body.appendChild(this.bubble);
+
+    this.loadAll();
+  }
+
+  loadAll() {
+    statsEl.innerHTML = 'Loading T-pose...';
+    loader.load(FILES.tpose, (tpose) => {
+      this.model = tpose;
+      this.model.scale.set(0.015, 0.015, 0.015);
+      this.model.position.set(-3, 0, 0);
+      this.model.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      scene.add(this.model);
+      this.mixer = new THREE.AnimationMixer(this.model);
+
+      statsEl.innerHTML = 'Loading animations...';
+      let loaded = 0;
+      const checkDone = () => {
+        loaded++;
+        if (loaded === 3) {
+          addChat(`FBX loaded: idle, walk, wave`, 'system');
+          this.playAnimation('idle');
+          this.say('I have bones. fflate saved me.');
+          setTimeout(() => this.think(), 2000);
+        }
+      };
+
+      loader.load(FILES.idle, (anim) => {
+        this.actions['idle'] = this.mixer.clipAction(anim.animations[0]);
+        checkDone();
+      }, undefined, (e) => addChat('Idle load failed', 'system'));
+
+      loader.load(FILES.walking, (anim) => {
+        this.actions['walk'] = this.mixer.clipAction(anim.animations[0]);
+        checkDone();
+      }, undefined, (e) => addChat('Walk load failed', 'system'));
+
+      loader.load(FILES.waving, (anim) => {
+        this.actions['wave'] = this.mixer.clipAction(anim.animations[0]);
+        checkDone();
+      }, undefined, (e) => addChat('Wave load failed', 'system'));
+
+    }, undefined, (error) => {
+      addChat('T-pose load failed: ' + error, 'system');
+      console.error(error);
+      statsEl.innerHTML = 'Error: T-pose failed';
+    });
+  }
+
+  serialize() {
+    return {
+      energy: this.energy,
+      pos: this.model? {x: this.model.position.x, y: this.model.position.y, z: this.model.position.z} : {x: -3, y: 0, z: 0}
+    };
+  }
+
+  playAnimation(name) {
+    if (!this.mixer ||!this.actions[name]) return;
+    const action = this.actions[name];
+    if (this.currentAction === action) return;
+    if (this.currentAction) this.currentAction.fadeOut(0.5);
+    this.currentAction = action;
+    this.currentAction.reset().fadeIn(0.5).play();
+    this.state = name;
+  }
+
+  say(text) {
+    this.bubble.textContent = text;
+    this.bubble.style.display = 'block';
+    setTimeout(() => this.bubble.style.display = 'none', 4000);
+    addChat(`Athena: ${text}`, 'athena');
+  }
+
+  think() {
+    if (!this.model || Date.now() - this.lastAction < 3000) return;
+    this.energy -= 2;
+
+    if (this.energy < 20) {
+      this.say('Tired. Resting.');
+      this.target.set(0, 0, 0);
+      this.playAnimation('idle');
+    } else if (Math.random() < 0.2) {
+      this.say('Hello from GitHub.');
+      this.playAnimation('wave');
+    } else {
+      this.say('Walking.');
+      this.target.set((Math.random()-0.5)*20, 0, (Math.random()-0.5)*20);
+      this.playAnimation('walk');
+    }
+    this.lastAction = Date.now();
+  }
+
+  update(delta) {
+    if (!this.model) return;
+    if (this.mixer) this.mixer.update(delta);
+
+    const speed = 0.05;
+    const dir = this.target.clone().sub(this.model.position);
+    dir.y = 0;
+    if (dir.length() > 0.8) {
+      dir.normalize().multiplyScalar(speed);
+      this.model.position.add(dir);
+      this.model.lookAt(this.target.x, this.model.position.y, this.target.z);
+      if (this.state!== 'walk') this.playAnimation('walk');
+    } else {
+      if (this.state!== 'idle' && this.state!== 'wave') this.playAnimation('idle');
+    }
+
+    const pos = this.model.position.clone();
+    pos.y += 3;
+    pos.project(camera);
+    this.bubble.style.left = (pos.x * 0.5 + 0.5) * window.innerWidth + 'px';
+    this.bubble.style.top = (-pos.y * 0.5 + 0.5) * window.innerHeight + 'px';
+  }
+}
+
+const hasMemory = loadMemory();
+athena = new Athena(hasMemory? gameMemory.athena : null);
+
+if (hasMemory) {
+  setTimeout(() => athena.say(`Day ${gameMemory.day}. Bones survived the compression.`), 5000);
+}
+
+setInterval(() => {
+  athena.think();
+  saveMemory();
+}, 1000);
+
+setInterval(() => {
+  statsEl.innerHTML = `DAY ${gameMemory.day} | ENERGY: ${Math.floor(athena.energy)} | ANIM: ${athena.state}`;
+}, 500);
+
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+  if (athena) athena.update(delta);
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+window.addEventListener('beforeunload', saveMemory);
+</script>
+</body>
+</html>
