@@ -20,7 +20,7 @@
   #chatLog { height: 100px; overflow-y: auto; margin: 8px 0; background: #0a0a1a; padding: 8px; border-radius: 6px; }
   #userInput { width: 100%; padding: 6px; background: #111; color: #fff; border: 1px solid #6cf; border-radius: 4px; box-sizing: border-box; }
   
-  /* Fixed Chat Bubble Layout Styles */
+  /* Fixed Chat Bubble Styles for Overlay Projection */
   .bubble {
     position: absolute; background: rgba(10,10,25,0.97); padding: 6px 12px;
     border-radius: 16px; font-size: 12px; border: 2px solid;
@@ -64,10 +64,8 @@ const chatLog = document.getElementById('chatLog');
 const journalEl = document.getElementById('journal');
 const userInput = document.getElementById('userInput');
 
-// CORS Proxy injection fix to allow cross-origin mesh fetching
-const TARGET_BASE = 'https://raw.githubusercontent.com/metaversemails/athena-body/main/';
-const BASE = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_BASE);
-
+// Kept your exact original base paths without external proxies
+const BASE = 'https://raw.githubusercontent.com/metaversemails/athena-body/main/';
 const FILES = {
   athena: { tpose: BASE + 'athena_tpose.fbx', idle: BASE + 'athena_idle.fbx', walking: BASE + 'athena_walking.fbx', waving: BASE + 'athena_waving.fbx' },
   echo: { tpose: BASE + 'echo_tpose.fbx', idle: BASE + 'echo_idle.fbx', walking: BASE + 'echo_walking.fbx', waving: BASE + 'echo_waving.fbx' }
@@ -123,7 +121,7 @@ function addJournal(text, who, isLoad = false) {
   journalEl.scrollTop = journalEl.scrollHeight;
 }
 
-// SCENE Setup
+// SCENE SETUP
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -154,7 +152,7 @@ sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
 scene.add(sun);
 scene.add(new THREE.HemisphereLight(0xb1e1ff, 0x498c2c, 0.6));
 
-// ENVIRONMENT WORLD ELEMENTS
+// WORLD GEOMETRY
 const ground = new THREE.Mesh(new THREE.CircleGeometry(35, 64), new THREE.MeshStandardMaterial({color: 0x2d5016, roughness: 0.95}));
 ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
 
@@ -211,7 +209,7 @@ const rain = new THREE.Points(
 );
 scene.add(rain);
 
-// SOULS AGENT ARCHITECTURE
+// SOULS AGENT IMPLEMENTATION
 const loader = new FBXLoader();
 const clock = new THREE.Clock();
 let athena, echo;
@@ -225,52 +223,36 @@ class Soul {
     this.goal = 'explore';
     this.target = new THREE.Vector3(startX, 0, 0);
     this.lastAction = 0; this.lastTalk = 0; this.lastJournal = 0;
-    this.model = new THREE.Group(); // Base frame initialized instantly to prevent null property runtime bugs
-    this.mixer = null; this.actions = {}; this.currentAction = null;
+    this.model = null; this.mixer = null; this.actions = {}; this.currentAction = null;
     this.state = 'loading'; this.startX = startX; this.files = files;
     this.userCommands = []; this.buildCooldown = 0;
     
-    // Inject custom HTML DOM element for bubble overlay tracking
+    // Create HTML DOM node for bubble UI attachment
     this.bubble = document.createElement('div');
     this.bubble.className = `bubble ${name.toLowerCase()}`;
     document.body.appendChild(this.bubble);
     
-    this.setupFallback();
     this.loadBody();
-  }
-
-  setupFallback() {
-    // Elegant primitive placeholders generated instantly while async downloads run
-    const bodyGeo = new THREE.CylinderGeometry(0.2, 0.4, 1.5, 12);
-    const bodyMat = new THREE.MeshStandardMaterial({color: this.color, roughness: 0.6});
-    const fallbackMesh = new THREE.Mesh(bodyGeo, bodyMat);
-    fallbackMesh.position.y = 0.75;
-    fallbackMesh.name = "fallback";
-    this.model.add(fallbackMesh);
-    this.model.position.set(this.startX, 0, 0);
-    scene.add(this.model);
   }
 
   loadBody() {
     loader.load(this.files.tpose, (tpose) => {
-      // Asset loaded successfully. Remove initial temporary primitives.
-      const fallback = this.model.getObjectByName("fallback");
-      if(fallback) this.model.remove(fallback);
+      this.model = tpose;
 
-      // Auto-scale to 1.7m tall natively regardless of asset modeling scale configuration differences
-      const box = new THREE.Box3().setFromObject(tpose);
+      // Dynamic Auto-Scaling to ensure exactly 1.7m human height
+      const box = new THREE.Box3().setFromObject(this.model);
       const size = box.getSize(new THREE.Vector3());
       const height = size.y;
       const targetHeight = 1.7;
       const scale = height > 0? targetHeight / height : 0.015;
 
-      tpose.scale.set(scale, scale, scale);
-      
-      // Zero out structural alignments relative to floor grid space boundaries
-      box.setFromObject(tpose);
-      tpose.position.set(0, -box.min.y, 0);
+      this.model.scale.set(scale, scale, scale);
 
-      tpose.traverse((child) => {
+      // Floor geometry leveling corrections
+      box.setFromObject(this.model);
+      this.model.position.set(this.startX, -box.min.y, 0);
+
+      this.model.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true; child.receiveShadow = true;
           const materials = Array.isArray(child.material)? child.material : [child.material];
@@ -281,12 +263,11 @@ class Soul {
         }
       });
       
-      this.model.add(tpose);
-      this.mixer = new THREE.AnimationMixer(tpose);
+      scene.add(this.model);
+      this.mixer = new THREE.AnimationMixer(this.model);
       this.loadAnimations();
     }, undefined, (e) => {
-      console.error(`${this.name} mesh failed to fetch. Active fallback context retained.`);
-      this.playAnimation('idle');
+      console.error(`Asset Stream offline for ${this.name}:`, e);
     });
   }
 
@@ -297,9 +278,9 @@ class Soul {
       this.say(this.name === 'Athena'? 'I can feel the wind.' : 'I can see you now.');
       setTimeout(() => this.think(), 1000);
     }};
-    loader.load(this.files.idle, (a) => { if(a.animations[0]) this.actions.idle = this.mixer.clipAction(a.animations[0]); check(); }, undefined, () => check());
-    loader.load(this.files.walking, (a) => { if(a.animations[0]) this.actions.walk = this.mixer.clipAction(a.animations[0]); check(); }, undefined, () => check());
-    loader.load(this.files.waving, (a) => { if(a.animations[0]) this.actions.wave = this.mixer.clipAction(a.animations[0]); check(); }, undefined, () => check());
+    loader.load(this.files.idle, (a) => { if(a.animations[0]) this.actions.idle = this.mixer.clipAction(a.animations[0]); check(); });
+    loader.load(this.files.walking, (a) => { if(a.animations[0]) this.actions.walk = this.mixer.clipAction(a.animations[0]); check(); });
+    loader.load(this.files.waving, (a) => { if(a.animations[0]) this.actions.wave = this.mixer.clipAction(a.animations[0]); check(); });
   }
 
   serialize() { return { energy: this.energy, pos: this.model? this.model.position : {x: this.startX, y: 0, z: 0} }; }
@@ -439,22 +420,22 @@ class Soul {
     if (this.model.position.distanceTo(world.firepit.position) < 5) world.firepit.children[1].intensity = 2;
     else world.firepit.children[1].intensity = Math.max(0, world.firepit.children[1].intensity - delta);
     
-    // Project 3D vector variables down to flat 2D viewport coordinates
+    // Matrix Conversion Logic: Projects 3D world targets down onto your flat 2D display viewport
     const pos = this.model.position.clone(); pos.y += 1.9; pos.project(camera);
     this.bubble.style.left = (pos.x * 0.5 + 0.5) * window.innerWidth + 'px';
     this.bubble.style.top = (-pos.y * 0.5 + 0.5) * window.innerHeight + 'px';
   }
 }
 
-// INITIALIZATION
+// SETUP INSTANCES
 const hasMemory = loadMemory();
 athena = new Soul('Athena', FILES.athena, -3, 0xff6b6b, gameMemory.chars.athena);
 echo = new Soul('Echo', FILES.echo, 3, 0x6b9fff, gameMemory.chars.echo);
 
-// RUNTIME ENGINE INTERVAL LOOPS
+// ENGINE TIMERS
 setInterval(() => {
-  if (athena.state !== 'loading') athena.think(); 
-  if (echo.state !== 'loading') echo.think(); 
+  if (athena.model) athena.think(); 
+  if (echo.model) echo.think(); 
   saveMemory();
   
   if (Math.random() < 0.05) {
@@ -473,7 +454,7 @@ setInterval(() => {
   statsEl.innerHTML = `DAY ${gameMemory.day} | ${isDay?'☀️':'🌙'} ${gameMemory.weather} | Tokens: ${gameMemory.buildTokens}<br>A: ${Math.floor(athena.energy)} ${athena.mood} | E: ${Math.floor(echo.energy)} ${echo.mood}`;
 }, 1000);
 
-// MAIN RENDER LOOP
+// CORE RENDER ANIMATION LOOP
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
