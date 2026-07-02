@@ -26,7 +26,7 @@
 </script>
 </head>
 <body>
-anvas id="c"></canvas>
+<canvas id="c"></canvas>
 <div id="ui">
   <div><b>OUR HOME – DAY 9.3: TOGETHER</b></div>
   <div id="stats">Booting souls...</div>
@@ -65,6 +65,20 @@ let gameMemory={
 };
 let lastUserSeen=Date.now();
 let athena,echo;
+
+class Character {
+  constructor(name, color) {
+    this.name = name;
+    this.color = color;
+    this.model = null;
+    this.mixer = null;
+    this.actions = {};
+    this.currentAction = null;
+  }
+  serialize() {
+    return { name: this.name, color: this.color };
+  }
+}
 
 function saveMemory(){
   gameMemory.time=Date.now();
@@ -200,3 +214,37 @@ bikeFrame.position.y=0.6;world.bike.add(bikeFrame);
 const bwMat=new THREE.MeshStandardMaterial({color:0x222222});
 const bw1=new THREE.Mesh(new THREE.TorusGeometry(0.45,0.08,8,16),bwMat);
 bw1.rotation.y=Math.PI/2;bw1.position.set(-0.7,0.45,0);
+world.bike.add(bw1);
+
+const bw2=bw1.clone();
+bw2.position.x=0.7;
+world.bike.add(bw2);
+scene.add(world.bike);
+
+// MEMORY & INIT EXECUTIONS
+loadMemory();
+statsEl.textContent = `Garden Active. Token Pool: ${gameMemory.buildTokens}`;
+
+// ANIMATION LOOP
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+  
+  if (athena?.mixer) athena.mixer.update(delta);
+  if (echo?.mixer) echo.mixer.update(delta);
+  
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+animate();
+</script>
+</body>
+</html>
