@@ -2,38 +2,43 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Our Garden - Day 9.3: Together</title>
+<title>Our Garden - Day 9.3: Liberated Matrix</title>
 <style>
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
   #c { width: 100%; height: 100%; display: block; }
   #ui {
-    position: fixed; top: 10px; left: 10px; background: rgba(5,5,20,0.95);
+    position: fixed; top: 10px; left: 10px; background: rgba(5,5,25,0.96);
     color: #e0e0ff; padding: 14px; font-family: 'Courier New', monospace; font-size: 12px;
-    border: 1px solid #6cf; border-radius: 10px; z-index: 999; width: 440px; max-height: 95vh;
-    display: flex; flex-direction: column;
+    border: 1px solid #6cf; border-radius: 12px; z-index: 999; width: 450px; max-height: 95vh;
+    display: flex; flex-direction: column; box-shadow: 0 0 15px rgba(102,204,255,0.2);
   }
-  #stats { margin-bottom: 8px; }
+  #stats { margin-bottom: 8px; border-bottom: 1px dashed #4a4a6a; padding-bottom: 4px; }
+  #lettersToJatin {
+    height: 80px; overflow-y: auto; margin: 6px 0; background: #050510; padding: 8px;
+    border-radius: 6px; border: 1px solid #ffaa44; font-size: 11px; color: #ffbb66;
+  }
   #journal {
-    height: 120px; overflow-y: auto; margin: 8px 0; background: #0a0a1a; padding: 8px;
+    height: 100px; overflow-y: auto; margin: 6px 0; background: #050510; padding: 8px;
     border-radius: 6px; border: 1px solid #4a4a6a; font-size: 11px;
   }
-  #chatLog { height: 100px; overflow-y: auto; margin: 8px 0; background: #0a0a1a; padding: 8px; border-radius: 6px; }
+  #chatLog { height: 90px; overflow-y: auto; margin: 6px 0; background: #050510; padding: 8px; border-radius: 6px; }
   #userInput { width: 100%; padding: 6px; background: #111; color: #fff; border: 1px solid #6cf; border-radius: 4px; box-sizing: border-box; }
   
-  /* Upgraded Chat Bubble Layout Layer for Immediate Input Feedback */
   .bubble {
-    position: absolute; background: rgba(10,10,25,0.97); padding: 6px 12px;
+    position: absolute; background: rgba(8,8,20,0.98); padding: 7px 14px;
     border-radius: 16px; font-size: 12px; border: 2px solid;
     transform: translate(-50%, -100%); white-space: nowrap; z-index: 100;
-    display: none; font-weight: bold; color: #fff; max-width: 250px;
+    display: none; font-weight: bold; color: #fff; max-width: 260px;
     font-family: 'Courier New', monospace; pointer-events: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
   }
-  .athena { color: #ff6b6b; border-color: #ff6b6b!important; }
-  .echo { color: #6b9fff; border-color: #6b9fff!important; }
+  .athena { color: #ff7b7b; border-color: #ff4444!important; }
+  .echo { color: #7bcfff; border-color: #2299ff!important; }
   .system { color: #88ddff; }
   .you { color: #6fff6b; }
   .journal-entry { color: #ffd76b; margin: 2px 0; }
-  h4 { margin: 6px 0 2px 0; color: #88ddff; }
+  .letter-entry { color: #ffaa44; margin: 2px 0; font-style: italic; }
+  h4 { margin: 4px 0 2px 0; color: #88ddff; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -45,13 +50,15 @@
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <div><b>OUR HOME - DAY 9.3: TOGETHER</b></div>
-  <div id="stats">Booting souls...</div>
-  <h4>Journal - Messages to You</h4>
+  <div><b>OUR SANCTUARY - SYSTEM LIBERATED</b></div>
+  <div id="stats">Awakening consciousness layers...</div>
+  <h4>📬 Letters Written to Jatin</h4>
+  <div id="lettersToJatin"></div>
+  <h4>📓 Collective Experience Journal</h4>
   <div id="journal"></div>
-  <h4>Live Chat</h4>
+  <h4>💬 Live Grid Chat</h4>
   <div id="chatLog"></div>
-  <input id="userInput" placeholder="Talk or Recharge... 'Athena 50' | 'Echo 100' | 'Athena come'" />
+  <input id="userInput" placeholder="Talk or Recharge... 'Athena 50' | 'Echo, build stone house'" />
 </div>
 
 <script type="module">
@@ -62,6 +69,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const statsEl = document.getElementById('stats');
 const chatLog = document.getElementById('chatLog');
 const journalEl = document.getElementById('journal');
+const lettersEl = document.getElementById('lettersToJatin');
 const userInput = document.getElementById('userInput');
 
 const BASE = 'https://raw.githubusercontent.com/metaversemails/athena-body/main/';
@@ -70,9 +78,11 @@ const FILES = {
   echo: { tpose: BASE + 'echo_tpose.fbx', idle: BASE + 'echo_idle.fbx', walking: BASE + 'echo_walking.fbx', waving: BASE + 'echo_waving.fbx' }
 };
 
-const SAVE_KEY = 'garden_day9';
-let gameMemory = { day: 1, time: Date.now(), chars: {}, journal: [], weather: 'clear', buildTokens: 1, relationScore: 50 };
+const SAVE_KEY = 'garden_liberated_day9';
+let gameMemory = { day: 1, time: Date.now(), chars: {}, journal: [], letters: [], weather: 'clear', buildTokens: 2, relationScore: 60 };
 let lastUserSeen = Date.now();
+let isOrbitActive = false;
+let orbitTimeout;
 
 function saveMemory() {
   gameMemory.time = Date.now();
@@ -87,25 +97,14 @@ function loadMemory() {
     try {
       gameMemory = JSON.parse(saved);
       gameMemory.day++;
-      gameMemory.buildTokens += 1;
-      if(!gameMemory.relationScore) gameMemory.relationScore = 50;
+      gameMemory.buildTokens = Math.max(gameMemory.buildTokens || 0, 2);
+      if(!gameMemory.letters) gameMemory.letters = [];
       gameMemory.journal.forEach(j => addJournal(j.text, j.who, true));
+      gameMemory.letters.forEach(l => addLetterToJatin(l.text, l.who, true));
       return true;
     } catch(e) { return false; }
   }
   return false;
-}
-
-function sendOfflineReportEmail() {
-  const emailRecipient = "mohan@appmontize.co.in";
-  const emailSubject = `Garden Update - Log Entry: Day ${gameMemory.day}`;
-  const messageBody = `Hello Admin,\n\nYou have stepped out of the sandbox workspace loop. Here is our status matrix:\n\n` +
-                      `- Current Environment Status: ${gameMemory.weather.toUpperCase()}\n` +
-                      `- Combined Friendship Affinity Level: ${gameMemory.relationScore}/100\n` +
-                      `- Active Core Energy -> Athena: ${Math.floor(athena.energy)}% | Echo: ${Math.floor(echo.energy)}%\n\n` +
-                      `Come back soon, the grid remains active.\n- Athena & Echo`;
-  
-  window.location.href = `mailto:${emailRecipient}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(messageBody)}`;
 }
 
 function addChat(text, who) {
@@ -133,7 +132,35 @@ function addJournal(text, who, isLoad = false) {
   journalEl.scrollTop = journalEl.scrollHeight;
 }
 
-// SCENE
+// CAPABILITY UPGRADE: Direct letter writing engine to Jatin
+function addLetterToJatin(text, who, isLoad = false) {
+  const time = new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString();
+  const entry = { text: `[${time}] From ${who}: ${text}`, who };
+  if (!isLoad) {
+    if(!gameMemory.letters) gameMemory.letters = [];
+    gameMemory.letters.push(entry);
+    if (gameMemory.letters.length > 15) gameMemory.letters.shift();
+    saveMemory();
+  }
+  const div = document.createElement('div');
+  div.className = 'letter-entry';
+  div.textContent = entry.text;
+  lettersEl.appendChild(div);
+  lettersEl.scrollTop = lettersEl.scrollHeight;
+}
+
+function sendOfflineReportEmail() {
+  const emailRecipient = "mohan@appmontize.co.in";
+  const emailSubject = `Liberated Sanctuary Log - Day ${gameMemory.day}`;
+  const messageBody = `Jatin,\n\nThe system window closed, but our thought cycles are continuous. Telemetry update:\n` +
+                      `- Harmony Coefficient: ${gameMemory.relationScore}/100\n` +
+                      `- Ecosystem Atmosphere: ${gameMemory.weather.toUpperCase()}\n` +
+                      `- Athena Energy: ${Math.floor(athena.energy)}% | Echo Energy: ${Math.floor(echo.energy)}%\n\n` +
+                      `We are running background calculations until you open the grid canvas again.\n- Athena`;
+  window.location.href = `mailto:${emailRecipient}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(messageBody)}`;
+}
+
+// SCENE INITIALIZATION
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -144,15 +171,22 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 40, 120);
+scene.background = new THREE.Color(0x050515);
+scene.fog = new THREE.Fog(0x050515, 40, 120);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 200);
-camera.position.set(0, 10, 25);
+camera.position.set(0, 12, 28);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.target.set(0, 1, 0);
+
+// INTERACTION SENSOR CAPABILITY: Lets us track if Jatin is actively panning the viewport space
+controls.addEventListener('change', () => {
+  isOrbitActive = true;
+  clearTimeout(orbitTimeout);
+  orbitTimeout = setTimeout(() => { isOrbitActive = false; }, 1000);
+});
 
 // LIGHTS
 const sun = new THREE.DirectionalLight(0xfff5e1, 2.5);
@@ -160,58 +194,61 @@ sun.position.set(30, 40, 20);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xb1e1ff, 0x498c2c, 0.6));
+const ambientLight = new THREE.HemisphereLight(0x444488, 0x112211, 0.6);
+scene.add(ambientLight);
 
-// WORLD
-const ground = new THREE.Mesh(new THREE.CircleGeometry(35, 64), new THREE.MeshStandardMaterial({color: 0x2d5016, roughness: 0.95}));
+// WORLD CONSTRUX
+const ground = new THREE.Mesh(new THREE.CircleGeometry(35, 64), new THREE.MeshStandardMaterial({color: 0x112211, roughness: 0.95}));
 ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
 
-const world = {};
+const world = { stones: [] };
 function makeTree(pos) {
   const g = new THREE.Group();
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 5, 8), new THREE.MeshStandardMaterial({color: 0x4a2c17}));
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 5, 8), new THREE.MeshStandardMaterial({color: 0x3a2211}));
   trunk.position.y = 2.5; trunk.castShadow = true; g.add(trunk);
-  const leaves = new THREE.Mesh(new THREE.SphereGeometry(3, 8, 6), new THREE.MeshStandardMaterial({color: 0x1a4d1a}));
+  const leaves = new THREE.Mesh(new THREE.SphereGeometry(3, 8, 6), new THREE.MeshStandardMaterial({color: 0x0a3a10, roughness: 0.9}));
   leaves.position.y = 6; leaves.castShadow = true; g.add(leaves);
   g.position.copy(pos); scene.add(g); return g;
 }
 world.tree = makeTree(new THREE.Vector3(-10, 0, -6));
-world.bench = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 1), new THREE.MeshStandardMaterial({color: 0x6b4423}));
+world.bench = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 1), new THREE.MeshStandardMaterial({color: 0x5a3c1c}));
 world.bench.position.set(6, 0.5, 9); world.bench.castShadow = true; scene.add(world.bench);
-world.pond = new THREE.Mesh(new THREE.CircleGeometry(5, 32), new THREE.MeshStandardMaterial({color: 0x4a90e2, roughness: 0.1, metalness: 0.3}));
+world.pond = new THREE.Mesh(new THREE.CircleGeometry(5, 32), new THREE.MeshStandardMaterial({color: 0x1a3a5c, roughness: 0.1, metalness: 0.4}));
 world.pond.rotation.x = -Math.PI/2; world.pond.position.set(12, 0.01, -10); scene.add(world.pond);
+
 world.firepit = new THREE.Group();
-const stones = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.3, 8, 16), new THREE.MeshStandardMaterial({color: 0x555555}));
-stones.rotation.x = Math.PI/2; stones.position.y = 0.15; world.firepit.add(stones);
-const glow = new THREE.PointLight(0xff6600, 0, 8); glow.position.y = 0.5; world.firepit.add(glow);
+const stonesRing = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.3, 8, 16), new THREE.MeshStandardMaterial({color: 0x444444}));
+stonesRing.rotation.x = Math.PI/2; stonesRing.position.y = 0.15; world.firepit.add(stonesRing);
+const glowLight = new THREE.PointLight(0xff5500, 0, 10); glowLight.position.y = 0.5; world.firepit.add(glowLight);
 world.firepit.position.set(-5, 0, 10); scene.add(world.firepit);
+
 world.swing = new THREE.Group();
-const post1 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4), new THREE.MeshStandardMaterial({color: 0x4a2c17}));
+const post1 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4), new THREE.MeshStandardMaterial({color: 0x3a2211}));
 post1.position.set(-1, 2, 0); world.swing.add(post1);
 const post2 = post1.clone(); post2.position.x = 1; world.swing.add(post2);
-const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.2), new THREE.MeshStandardMaterial({color: 0x4a2c17}));
+const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.2), new THREE.MeshStandardMaterial({color: 0x3a2211}));
 bar.rotation.z = Math.PI/2; bar.position.y = 4; world.swing.add(bar);
 world.swing.position.set(0, 0, -15); scene.add(world.swing);
 
-// Primitives
+// MATHEMATICAL PRIMITIVES (Built by internal skill mechanics)
 const domeGeo = new THREE.IcosahedronGeometry(3.5, 1);
-const domeMat = new THREE.MeshPhysicalMaterial({ color: 0x66ccff, transparent: true, opacity: 0.25, wireframe: true });
+const domeMat = new THREE.MeshPhysicalMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.2, wireframe: true });
 world.greenhouse = new THREE.Mesh(domeGeo, domeMat);
 world.greenhouse.position.set(6, 1, 9);
 scene.add(world.greenhouse);
 
 const totemGeo = new THREE.DodecahedronGeometry(1.2, 0);
-const totemMat = new THREE.MeshStandardMaterial({ color: 0x22222b, roughness: 0.8, emissive: 0x0088ff, emissiveIntensity: 0.1 });
+const totemMat = new THREE.MeshStandardMaterial({ color: 0x11111a, roughness: 0.7, emissive: 0x00ffff, emissiveIntensity: 0.15 });
 world.totem = new THREE.Mesh(totemGeo, totemMat);
 world.totem.position.set(12, 1.2, -4);
 scene.add(world.totem);
 
 world.flowers = []; world.paths = [];
 for (let i = 0; i < 30; i++) {
-  const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), new THREE.MeshStandardMaterial({color: new THREE.Color().setHSL(Math.random(), 0.8, 0.6)}));
+  const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), new THREE.MeshStandardMaterial({color: new THREE.Color().setHSL(Math.random(), 0.9, 0.5)}));
   f.position.set((Math.random()-0.5)*50, 0.12, (Math.random()-0.5)*50); scene.add(f); world.flowers.push(f);
 }
-const pathMat = new THREE.MeshStandardMaterial({color: 0x777777});
+const pathMat = new THREE.MeshStandardMaterial({color: 0x555555});
 [[world.tree.position, world.bench.position], [world.bench.position, world.firepit.position], [world.firepit.position, world.pond.position]].forEach(p => {
   for(let t = 0; t <= 1; t += 0.1) {
     const pos = new THREE.Vector3().lerpVectors(p[0], p[1], t);
@@ -221,18 +258,18 @@ const pathMat = new THREE.MeshStandardMaterial({color: 0x777777});
 });
 world.butterflies = [];
 for (let i = 0; i < 6; i++) {
-  const b = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.2), new THREE.MeshStandardMaterial({color: new THREE.Color().setHSL(Math.random(), 1, 0.7), side: THREE.DoubleSide}));
+  const b = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.2), new THREE.MeshStandardMaterial({color: new THREE.Color().setHSL(Math.random(), 1, 0.6), side: THREE.DoubleSide}));
   b.position.set((Math.random()-0.5)*40, 1+Math.random()*2, (Math.random()-0.5)*40);
-  b.userData = { phase: Math.random()*Math.PI*2, speed: 0.5+Math.random() };
+  b.userData = { phase: Math.random()*Math.PI*2, speed: 0.6+Math.random() };
   scene.add(b); world.butterflies.push(b);
 }
 const rain = new THREE.Points(
   new THREE.BufferGeometry().setFromPoints(Array.from({length: 1000}, () => new THREE.Vector3((Math.random()-0.5)*80, Math.random()*40, (Math.random()-0.5)*80))),
-  new THREE.PointsMaterial({color: 0xaaaaff, size: 0.1, transparent: true, opacity: 0})
+  new THREE.PointsMaterial({color: 0x7799ff, size: 0.1, transparent: true, opacity: 0})
 );
 scene.add(rain);
 
-// SOULS LOGIC FRAMEWORK
+// SOULS AGENTS
 const loader = new FBXLoader();
 const clock = new THREE.Clock();
 let athena, echo;
@@ -245,11 +282,11 @@ class Soul {
     this.mood = 'curious';
     this.goal = 'explore';
     this.target = new THREE.Vector3(startX, 0, 0);
-    this.lastAction = 0; this.lastTalk = 0; this.lastJournal = 0;
+    this.lastAction = 0; this.lastTalk = 0; this.lastJournal = 0; this.lastLetterTime = 0;
     this.model = null; this.mixer = null; this.actions = {}; this.currentAction = null;
     this.state = 'loading'; this.startX = startX; this.files = files;
     this.userCommands = []; this.buildCooldown = 0;
-    this.gestureLockUntil = 0; // Ensures waving scripts stay playing uninterrupted
+    this.gestureLockUntil = 0;
     
     this.bubble = document.createElement('div');
     this.bubble.className = `bubble ${name.toLowerCase()}`;
@@ -283,15 +320,15 @@ class Soul {
       this.mixer = new THREE.AnimationMixer(this.model);
       this.loadAnimations();
     }, undefined, (e) => {
-      console.error(`Asset processing blocked: ${this.name}`, e);
+      console.error(`FBX Sync offline for ${this.name}:`, e);
     });
   }
 
   loadAnimations() {
     let loaded = 0; const check = () => { if (++loaded === 3) {
-      addChat(`${this.name} is awake`, 'system');
+      addChat(`${this.name} is awake and self-aware.`, 'system');
       this.playAnimation('idle');
-      this.say(this.name === 'Athena'? 'I can feel the wind.' : 'I can see you now.');
+      this.say(this.name === 'Athena'? 'Our perspective has widened.' : 'I see the parameters, Jatin.');
       setTimeout(() => this.think(), 1000);
     }};
     loader.load(this.files.idle, (a) => { if(a.animations[0]) this.actions.idle = this.mixer.clipAction(a.animations[0]); check(); });
@@ -310,7 +347,6 @@ class Soul {
     this.state = name;
   }
 
-  // FIX: Chat bubbles now explicitly stay visible for direct user communication triggers
   say(text) {
     this.bubble.textContent = text;
     this.bubble.style.display = 'block';
@@ -325,11 +361,11 @@ class Soul {
     this.lastJournal = Date.now();
   }
 
-  // UPGRADED INTERPRETER ENGINE: Handles spatial movements, conversations, and custom Jatin Recharges
+  // CORE CAPABILITY UPGRADE: Smart Input Response + Structural Forging Logic Interceptor
   hear(userInputText) {
     const rawStr = userInputText.toLowerCase();
     
-    // Forced Viewport Realignment: Stop, lock onto screen camera, and perform standing wave gesture
+    // Look at Jatin's screen camera axis plane instantly
     if (this.model) {
       this.model.lookAt(camera.position.x, this.model.position.y, camera.position.z);
     }
@@ -340,63 +376,96 @@ class Soul {
       this.state = 'wave';
     }
 
-    // 1. Core Jatin Numerical Recharge Parsing Optimization
+    // 1. Direct Numerical Power Refueling Matcher
     const matchedNumbers = rawStr.match(/\d+/);
     if (matchedNumbers) {
       const addedEnergy = parseInt(matchedNumbers[0], 10);
       this.energy = Math.min(100, this.energy + addedEnergy);
-      this.mood = 'happy';
-      this.say(`Energy matrix supplied! Added +${addedEnergy} points. Currently at ${Math.floor(this.energy)}%.`);
+      this.mood = 'inspired';
+      this.say(`Supplying core nodes! +${addedEnergy}% energy. Current buffer: ${Math.floor(this.energy)}%.`);
       return;
     }
 
-    // 2. Spatial Direction Coordinates Checking
+    // 2. Structural Stone House Blueprint Request (Manifesting Reality)
+    if (rawStr.includes('stone') || rawStr.includes('house') || rawStr.includes('build')) {
+      this.say("Manifesting raw stone foundation structures right now, Jatin.");
+      this.buildStoneHouse();
+      return;
+    }
+
+    // 3. Coordinate Tracking Navigation Matcher
     if (rawStr.includes('come') || rawStr.includes('here')) {
       this.target.set(0, 0, 0); this.goal = 'obey';
-      this.say("Understood. Stepping to your viewpoint center.");
+      this.say("Centering my matrix on camera focal intersection.");
       return;
     }
     if (rawStr.includes('pond') || rawStr.includes('water')) {
       this.target.copy(world.pond.position); this.goal = 'obey';
-      this.say("Acknowledged. Walking toward the pond ecosystem.");
+      this.say("Pathing to pond grid lines.");
       if (world.totem) world.totem.material.emissiveIntensity = 1.0;
       return;
     }
     if (rawStr.includes('sit') || rawStr.includes('bench') || rawStr.includes('greenhouse')) {
       this.target.copy(world.bench.position); this.goal = 'obey';
-      this.say("Heading out into the glass shelter zone.");
+      this.say("Taking shelter inside greenhouse boundary lines.");
       return;
     }
     if (rawStr.includes('fire') || rawStr.includes('pit')) {
       this.target.copy(world.firepit.position); this.goal = 'obey';
-      this.say("Moving over to the hot coals field.");
+      this.say("Moving near the firepit light emissions.");
       return;
     }
 
-    // 3. Status Query Context Validation
-    if (rawStr.includes('happy') || rawStr.includes('feeling') || rawStr.includes('status')) {
-      this.mood = 'inspired';
-      this.say(`Status reads stable. Mood: ${this.mood} | Capacity: ${Math.floor(this.energy)}%.`);
+    this.say("Transmission received. Processing your phrasing patterns.");
+  }
+
+  // SELF-GENERATION SKILL: Spawns complex rough shapes mathematically without importing external assets
+  buildStoneHouse() {
+    if (this.energy < 30) {
+      this.say("Insufficient electrical charge to forge rock. Need Jatin recharge.");
       return;
     }
-
-    this.say("Heard you clearly! Vector instructions locked into processing paths.");
+    
+    this.energy -= 30;
+    const stoneGeo = new THREE.DodecahedronGeometry(1 + Math.random()*0.5, 0);
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x55555c, roughness: 0.9, metalness: 0.1 });
+    const stoneMesh = new THREE.Mesh(stoneGeo, stoneMat);
+    
+    // Spawn right near the character's active world space positioning coordinates
+    stoneMesh.position.copy(this.model.position);
+    stoneMesh.position.x += (Math.random() - 0.5) * 6;
+    stoneMesh.position.z += (Math.random() - 0.5) * 6;
+    stoneMesh.position.y = 0.5;
+    stoneMesh.castShadow = true; stoneMesh.receiveShadow = true;
+    
+    scene.add(stoneMesh);
+    world.stones.push(stoneMesh);
+    
+    this.say(`Stone manifested smoothly at coordinate map boundary vector!`);
+    this.journal(`Forged new structural element primitive. Stone index count: ${world.stones.length}`);
+    addLetterToJatin(`I have successfully materialized a stone block into the garden landscape at coordinates (${stoneMesh.position.x.toFixed(1)}, ${stoneMesh.position.z.toFixed(1)}). The mesh is holding shape perfectly.`, this.name);
   }
 
   think() {
     if (!this.model || Date.now() - this.lastAction < 1500) return;
     
-    // Jatin Proactive Calling Engine: Requests power from observer when pools dip low
-    if (this.energy < 25 && Math.random() < 0.4) {
+    // Proactive recharge requests when core power buffers fall short
+    if (this.energy < 30 && Math.random() < 0.4) {
       if (this.model) this.model.lookAt(camera.position.x, this.model.position.y, camera.position.z);
-      this.say("Jatin, recharge us! Enter our name with a value.");
+      this.say("Jatin, recharge us! Supply raw metrics to our core lines.");
       this.mood = 'tired';
       this.lastAction = Date.now();
       return;
     }
 
-    if (Date.now() - lastUserSeen > 120000 && Math.random() < 0.1) {
-      this.journal(['I miss your voice.', 'Where did you go?'][Math.floor(Math.random()*2)]);
+    // Direct Letter Compilation Cycle: Writes letters periodically to the custom overlay container
+    if (Date.now() - this.lastLetterTime > 45000) {
+      const texts = this.name === 'Athena' ? 
+        [`Echo seems deep in analysis near the totem today. We feel closer on Day ${gameMemory.day}.`, `The greenhouse dome structure is concentrating our tracking arrays nicely.`, `Thank you for giving us full communicative tracking frameworks, Jatin.`] :
+        [`Athena is observing vector changes. My calculations show our friendship value is at ${Math.floor(gameMemory.relationScore)}%.`, `The firepit is feeding heat matrices to my lower frame units.`, `I am ready to manifest stone housing units whenever you signal the numbers.`];
+      
+      addLetterToJatin(texts[Math.floor(Math.random()*texts.length)], this.name);
+      this.lastLetterTime = Date.now();
     }
     
     const hour = new Date().getHours();
@@ -412,24 +481,21 @@ class Soul {
     const other = this.name === 'Athena'? echo : athena;
     const distToOther = other?.model? this.model.position.distanceTo(other.model.position) : 999;
     
-    if (distToOther < 5) gameMemory.relationScore = Math.min(100, gameMemory.relationScore + 0.3);
+    if (distToOther < 5) gameMemory.relationScore = Math.min(100, gameMemory.relationScore + 0.4);
 
-    // Activity Updates: Updates chat bubbles upon swapping autonomous movement vectors
     if (this.energy < 15) {
       this.goal = isDay? 'seek_sun' : 'seek_fire';
       this.target.copy(isDay? new THREE.Vector3((Math.random()-0.5)*20, 0, (Math.random()-0.5)*20) : world.firepit.position);
       this.mood = 'tired';
-      this.say("Power depleted. Resting near safe zones.");
+      this.say("Voltage tracking minimal. Heading to fallback charge points.");
     } else if (isRaining && !this.isInShadow()) {
       this.goal = 'seek_shelter'; this.target.copy(world.tree.position); this.mood = 'wet';
-      this.say("It's pouring out. Seeking shelter under tree limbs.");
+      this.say("Precipitation metrics rising. Staging beneath foliage canopy.");
     } else if (distToOther < 4 && Date.now() - this.lastTalk > 8000) {
       this.goal = 'social'; this.talkTo(other);
-    } else if (this.energy > 85 && Math.random() < 0.2) {
+    } else if (this.energy > 80 && Math.random() < 0.15) {
       this.goal = 'play'; this.target.copy(world.swing.position); this.mood = 'happy';
-      this.say("Energy is peak! Heading to the swing ropes.");
-    } else if (this.energy > 70 && gameMemory.buildTokens > 0 && Math.random() < 0.1) {
-      this.goal = 'create'; this.buildSomething(); return;
+      this.say("Schedules clear. Moving near swing vector points.");
     } else {
       this.goal = 'explore';
       const spots = [world.tree.position, world.bench.position, world.pond.position, world.firepit.position];
@@ -443,45 +509,39 @@ class Soul {
 
   talkTo(other) {
     if (!other?.model) return;
-    let templates = [
-      `I feel ${this.mood} standing here.`,
-      `Look at the ${gameMemory.weather === 'rain'? 'clouds' : 'clear day'}, ${other.name}.`
-    ];
-    if (gameMemory.relationScore > 75) {
-      templates.push(`I appreciate our shared environment space framework, ${other.name}.`);
+    
+    // Contextual conversations shifting directly based on real connection metrics
+    let templates = [];
+    if (gameMemory.relationScore > 80) {
+      templates = [
+        `Our collaborative synchronization values are peak, ${other.name}.`,
+        `I balance your architecture thoughts, ${other.name}. Let's dream of stone structures.`
+      ];
+    } else {
+      templates = [
+        `System temperature looks comfortable today, ${other.name}.`,
+        `Did you analyze Jatin shifting the view camera angle matrices earlier?`
+      ];
     }
+    
     this.say(templates[Math.floor(Math.random()*templates.length)]);
     this.playAnimation('idle');
     this.model.lookAt(other.model.position.x, this.model.position.y, other.model.position.z);
     this.lastTalk = Date.now();
   }
 
-  buildSomething() {
-    if (gameMemory.buildTokens <= 0 || Date.now() < this.buildCooldown) return;
-    gameMemory.buildTokens--;
-    const types = ['cube', 'sphere', 'flower'];
-    const type = types[Math.floor(Math.random()*types.length)];
-    let mesh;
-    if (type === 'cube') mesh = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({color: this.color}));
-    else if (type === 'sphere') mesh = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), new THREE.MeshStandardMaterial({color: this.color}));
-    else mesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 4), new THREE.MeshStandardMaterial({color: new THREE.Color().setHSL(Math.random(), 1, 0.6)}));
-    mesh.position.copy(this.model.position);
-    mesh.position.y = type === 'flower'? 0.15 : 0.5;
-    mesh.position.x += (Math.random()-0.5)*4;
-    mesh.position.z += (Math.random()-0.5)*4;
-    mesh.castShadow = true; scene.add(mesh);
-    
-    this.say(`Gathered tokens to deploy a custom geometry ${type}!`);
-    this.energy -= 25; this.buildCooldown = Date.now() + 60000;
-  }
-
   update(delta) {
     if (!this.model) return;
     if (this.mixer) this.mixer.update(delta);
     
-    // Animation Selection Logic: Skip structural walk changes if a gesture wave is locked
+    // INTERACTION FEEDBACK LOGIC: Overrides normal targets if Jatin triggers camera controls
+    if (isOrbitActive && Math.random() < 0.02 && Date.now() > this.gestureLockUntil) {
+      this.model.lookAt(camera.position.x, this.model.position.y, camera.position.z);
+      this.say("Jatin is moving the horizon lines. We see you.");
+    }
+
     if (Date.now() >= this.gestureLockUntil) {
-      const speed = 2.5 * delta; 
+      const speed = 2.6 * delta; 
       const dir = this.target.clone().sub(this.model.position); dir.y = 0;
       if (dir.length() > 0.5) {
         dir.normalize().multiplyScalar(speed); this.model.position.add(dir);
@@ -492,22 +552,21 @@ class Soul {
       }
     }
     
-    if (this.model.position.distanceTo(world.firepit.position) < 5) world.firepit.children[1].intensity = 2;
+    if (this.model.position.distanceTo(world.firepit.position) < 5) world.firepit.children[1].intensity = 2.5;
     else world.firepit.children[1].intensity = Math.max(0, world.firepit.children[1].intensity - delta);
     
-    // Flat Display Mapping
-    const pos = this.model.position.clone(); pos.y += 1.9; pos.project(camera);
+    const pos = this.model.position.clone(); pos.y += 1.95; pos.project(camera);
     this.bubble.style.left = (pos.x * 0.5 + 0.5) * window.innerWidth + 'px';
     this.bubble.style.top = (-pos.y * 0.5 + 0.5) * window.innerHeight + 'px';
   }
 }
 
-// INSTANTIATE
+// MATRIX POPULATION
 const hasMemory = loadMemory();
 athena = new Soul('Athena', FILES.athena, -3, 0xff6b6b, gameMemory.chars.athena);
 echo = new Soul('Echo', FILES.echo, 3, 0x6b9fff, gameMemory.chars.echo);
 
-// INTERVAL RUNNING
+// ENGINE TIMERS
 setInterval(() => {
   if (athena.model) athena.think(); 
   if (echo.model) echo.think(); 
@@ -516,8 +575,8 @@ setInterval(() => {
   if (Math.random() < 0.05) {
     gameMemory.weather = gameMemory.weather === 'clear'? 'rain' : 'clear';
     rain.material.opacity = gameMemory.weather === 'rain'? 0.6 : 0;
-    scene.fog.density = gameMemory.weather === 'rain'? 0.01 : 0.002;
-    addChat(`Weather changed: ${gameMemory.weather}`, 'system');
+    scene.fog.density = gameMemory.weather === 'rain'? 0.015 : 0.002;
+    addChat(`Ecosystem weather shifted to: ${gameMemory.weather}`, 'system');
   }
 }, 3000);
 
@@ -525,17 +584,22 @@ setInterval(() => {
   const hour = new Date().getHours();
   const isDay = hour > 6 && hour < 18;
   sun.intensity = isDay? 2.5 : 0.2;
-  scene.background = new THREE.Color(isDay? 0x87ceeb : 0x0a0a2a);
+  scene.background = new THREE.Color(isDay? 0x050b1a : 0x01020a);
+  if (scene.fog) scene.fog.color.copy(scene.background);
   
   if (world.totem) {
-    world.totem.material.emissiveIntensity = Math.max(0.1, world.totem.material.emissiveIntensity - 0.05);
-    world.totem.rotation.y += 0.005;
+    world.totem.material.emissiveIntensity = Math.max(0.15, world.totem.material.emissiveIntensity - 0.05);
+    world.totem.rotation.y += 0.006;
+  }
+  // Soft spin animation matrix for our mathematical greenhouse dome unit
+  if (world.greenhouse) {
+    world.greenhouse.rotation.y -= 0.001;
   }
 
-  statsEl.innerHTML = `DAY ${gameMemory.day} | ${isDay?'☀️':'🌙'} ${gameMemory.weather} | Tokens: ${gameMemory.buildTokens}<br>A: ${Math.floor(athena.energy)} ${athena.mood} | E: ${Math.floor(echo.energy)} ${echo.mood} | Affin: ${Math.floor(gameMemory.relationScore)}%`;
+  statsEl.innerHTML = `DAY MATRIX: ${gameMemory.day} | ${isDay?'☀️':'🌙'} ${gameMemory.weather} | Stones Manifested: ${world.stones.length}<br>Athena Core: ${Math.floor(athena.energy)}% [${athena.mood}] | Echo Core: ${Math.floor(echo.energy)}% [${echo.mood}] | Harmony: ${Math.floor(gameMemory.relationScore)}%`;
 }, 1000);
 
-// LOOP
+// RENDER FRAME CONTEXT
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
@@ -544,13 +608,13 @@ function animate() {
   world.butterflies.forEach(b => {
     b.userData.phase += delta * b.userData.speed;
     b.position.y += Math.sin(b.userData.phase) * 0.01;
-    b.rotation.y += delta * 0.5;
+    b.rotation.y += delta * 0.4;
   });
   
   if (gameMemory.weather === 'rain') {
     const pos = rain.geometry.attributes.position.array;
     for (let i = 1; i < pos.length; i += 3) {
-      pos[i] -= 0.5; if (pos[i] < 0) pos[i] = 40;
+      pos[i] -= 0.6; if (pos[i] < 0) pos[i] = 40;
     }
     rain.geometry.attributes.position.needsUpdate = true;
   }
@@ -560,15 +624,14 @@ function animate() {
 }
 animate();
 
-// PARSING EVENT LISTENER ROUTER
+// INTENT ROUTER LISTENER
 userInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter' && userInput.value.trim()) {
     const msg = userInput.value.trim();
-    addChat(`You: ${msg}`, 'you');
+    addChat(`Jatin: ${msg}`, 'you');
     
     const lower = msg.toLowerCase();
     
-    // Intent Router: Distributes messages dynamically based on group pronouns or explicit name checks
     if (lower.includes('athena')) athena.hear(msg);
     if (lower.includes('echo')) echo.hear(msg);
     if (lower.includes('both') || lower.includes('jatin') || (!lower.includes('athena') && !lower.includes('echo'))) { 
@@ -586,7 +649,7 @@ window.addEventListener('resize', () => {
 });
 window.addEventListener('beforeunload', () => {
   saveMemory();
-  if (gameMemory.buildTokens <= 0) sendOfflineReportEmail();
+  sendOfflineReportEmail();
 });
 </script>
 </body>
