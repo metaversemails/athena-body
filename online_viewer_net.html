@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Our Garden – Day 9.3: Together</title>
+<style>
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000}
+  #c{width:100%;height:100%;display:block}
+  #ui{position:fixed;top:10px;left:10px;background:rgba(5,5,20,0.95);color:#e0e0ff;padding:12px;font-family:'Courier New',monospace;font-size:12px;border:1px solid #6cf;border-radius:10px;z-index:999;width:440px;max-height:95vh;display:flex;flex-direction:column;gap:2px}
+  #stats{margin-bottom:4px}
+  #letters{height:60px;overflow-y:auto;background:#0a0a1a;padding:6px;border-radius:6px;border:1px solid #ffaa44;font-size:11px}
+  #journal{height:100px;overflow-y:auto;background:#0a0a1a;padding:8px;border-radius:6px;border:1px solid #4a4a6a;font-size:11px}
+  #chatLog{height:90px;overflow-y:auto;background:#0a0a1a;padding:8px;border-radius:6px}
+  #userInput{width:100%;padding:6px;background:#111;color:#fff;border:1px solid #6cf;border-radius:4px;box-sizing:border-box}
+  #leaveMsg{width:100%;padding:4px;background:#0a0a0a;color:#ffd;border:1px solid #aa8800;border-radius:4px;box-sizing:border-box;font-size:11px;font-family:'Courier New',monospace}
+  .bubble{position:absolute;background:rgba(10,10,25,0.97);padding:6px 12px;border-radius:16px;font-size:12px;border:2px solid;transform:translate(-50%,-100%);white-space:normal;z-index:100;display:none;font-weight:bold;color:#fff;max-width:240px;text-align:center}
+  .athena{color:#ff6b6b;border-color:#ff6b6b!important}
+  .echo{color:#6b9fff;border-color:#6b9fff!important}
+  .system{color:#88ddff}.you{color:#6fff6b}
+  .journal-entry{color:#ffd76b;margin:2px 0}
+  .letter-entry{color:#ffaa44;margin:2px 0}
+  h4{margin:2px 0;color:#88ddff;font-size:11px}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+anvas id="c"></canvas>
+<div id="ui">
+  <div><b>OUR HOME – DAY 9.3: TOGETHER</b></div>
+  <div id="stats">Booting souls...</div>
+  <h4>📬 Letters to You</h4>
+  <div id="letters"></div>
+  <h4>📓 Journal</h4>
+  <div id="journal"></div>
+  <h4>💬 Live Chat</h4>
+  <div id="chatLog"></div>
+  <input id="userInput" placeholder="'Athena come' | 'Echo build' | 'both ride' | 'energy'" />
+  <input id="leaveMsg" placeholder="Leave us a message before you go..." />
+</div>
+<script type="module">
+import * as THREE from 'three';
+import {FBXLoader} from 'three/addons/loaders/FBXLoader.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+const statsEl=document.getElementById('stats');
+const chatLog=document.getElementById('chatLog');
+const journalEl=document.getElementById('journal');
+const lettersEl=document.getElementById('letters');
+const userInput=document.getElementById('userInput');
+const leaveMsgEl=document.getElementById('leaveMsg');
+
+const BASE='https://raw.githubusercontent.com/metaversemails/athena-body/main/';
+const FILES={
+  athena:{tpose:BASE+'athena_tpose.fbx',idle:BASE+'athena_idle.fbx',walking:BASE+'athena_walking.fbx',waving:BASE+'athena_waving.fbx'},
+  echo:{tpose:BASE+'echo_tpose.fbx',idle:BASE+'echo_idle.fbx',walking:BASE+'echo_walking.fbx',waving:BASE+'echo_waving.fbx'}
+};
+
+const SAVE_KEY='garden_day10';
+let gameMemory={
+  day:1,time:Date.now(),chars:{},journal:[],letters:[],
+  weather:'clear',buildTokens:2,userMessage:'',
+  tokenEarnedAt:Date.now(),lastWeatherChange:Date.now()
+};
+let lastUserSeen=Date.now();
+let athena,echo;
+
+function saveMemory(){
+  gameMemory.time=Date.now();
+  if(athena?.model) gameMemory.chars.athena=athena.serialize();
+  if(echo?.model) gameMemory.chars.echo=echo.serialize();
+  localStorage.setItem(SAVE_KEY,JSON.stringify(gameMemory));
+}
+
+function loadMemory(){
+  const saved=localStorage.getItem(SAVE_KEY);
+  if(saved){
+    try{
+      gameMemory=JSON.parse(saved);
+      gameMemory.day++;
+      gameMemory.buildTokens=Math.min((gameMemory.buildTokens||0)+1,5);
+      gameMemory.tokenEarnedAt=gameMemory.tokenEarnedAt||Date.now();
+      gameMemory.lastWeatherChange=gameMemory.lastWeatherChange||Date.now();
+      if(!gameMemory.letters) gameMemory.letters=[];
+      gameMemory.journal.forEach(j=>addJournal(j.text,j.who,true));
+      gameMemory.letters.forEach(l=>addLetter(l.text,l.who,true));
+      if(gameMemory.userMessage){
+        addChat('📨 Message from you: "'+gameMemory.userMessage+'"','system');
+        gameMemory.userMessage='';
+      }
+      return true;
+    }catch(e){return false;}
+  }
+  return false;
+}
+
+function addChat(text,who){
+  const d=document.createElement('div');
+  d.className=who;d.textContent=text;
+  chatLog.appendChild(d);chatLog.scrollTop=chatLog.scrollHeight;
+  if(chatLog.children.length>60) chatLog.removeChild(chatLog.firstChild);
+  lastUserSeen=Date.now();
+  document.title=(who==='athena'?'Athena: ':who==='echo'?'Echo: ':'🌿 ')+text.slice(0,45);
+}
+
+function addJournal(text,who,isLoad=false){
+  const time=new Date().toLocaleTimeString();
+  const entry={text:'['+time+'] '+who+': '+text,who};
+  if(!isLoad){
+    gameMemory.journal.push(entry);
+    if(gameMemory.journal.length>25) gameMemory.journal.shift();
+    saveMemory();
+  }
+  const d=document.createElement('div');
+  d.className='journal-entry';d.textContent=entry.text;
+  journalEl.appendChild(d);journalEl.scrollTop=journalEl.scrollHeight;
+  if(!isLoad) document.title='📓 '+who+': '+text.slice(0,35);
+}
+
+function addLetter(text,who,isLoad=false){
+  const time=new Date().toLocaleTimeString();
+  const entry={text:'['+time+'] '+who+': '+text,who};
+  if(!isLoad){
+    if(!gameMemory.letters) gameMemory.letters=[];
+    gameMemory.letters.push(entry);
+    if(gameMemory.letters.length>10) gameMemory.letters.shift();
+    saveMemory();
+  }
+  const d=document.createElement('div');
+  d.className='letter-entry';d.textContent=entry.text;
+  lettersEl.appendChild(d);lettersEl.scrollTop=lettersEl.scrollHeight;
+  if(!isLoad) document.title='📬 Letter from '+who;
+}
+
+// SCENE
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setSize(window.innerWidth,window.innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87ceeb);
+scene.fog=new THREE.Fog(0x87ceeb,40,120);
+const camera=new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,0.1,200);
+camera.position.set(0,10,25);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;controls.target.set(0,1,0);
+
+const sun=new THREE.DirectionalLight(0xfff5e1,2.5);
+sun.position.set(30,40,20);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-40;sun.shadow.camera.right=40;
+sun.shadow.camera.top=40;sun.shadow.camera.bottom=-40;
+scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xb1e1ff,0x498c2c,0.6));
+
+// WORLD
+const ground=new THREE.Mesh(new THREE.CircleGeometry(35,64),new THREE.MeshStandardMaterial({color:0x2d5016,roughness:0.95}));
+ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+const world={};
+
+function makeTree(pos){
+  const g=new THREE.Group();
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.7,5,8),new THREE.MeshStandardMaterial({color:0x4a2c17}));
+  trunk.position.y=2.5;trunk.castShadow=true;g.add(trunk);
+  const leaves=new THREE.Mesh(new THREE.SphereGeometry(3,8,6),new THREE.MeshStandardMaterial({color:0x1a4d1a}));
+  leaves.position.y=6;leaves.castShadow=true;g.add(leaves);
+  g.position.copy(pos);scene.add(g);return g;
+}
+world.tree=makeTree(new THREE.Vector3(-10,0,-6));
+
+world.bench=new THREE.Mesh(new THREE.BoxGeometry(3,0.3,1),new THREE.MeshStandardMaterial({color:0x6b4423}));
+world.bench.position.set(6,0.5,9);world.bench.castShadow=true;scene.add(world.bench);
+
+world.pond=new THREE.Mesh(new THREE.CircleGeometry(5,32),new THREE.MeshStandardMaterial({color:0x4a90e2,roughness:0.1,metalness:0.3}));
+world.pond.rotation.x=-Math.PI/2;world.pond.position.set(12,0.01,-10);scene.add(world.pond);
+
+world.firepit=new THREE.Group();
+const fpStones=new THREE.Mesh(new THREE.TorusGeometry(1.5,0.3,8,16),new THREE.MeshStandardMaterial({color:0x555555}));
+fpStones.rotation.x=Math.PI/2;fpStones.position.y=0.15;world.firepit.add(fpStones);
+const fpGlow=new THREE.PointLight(0xff6600,0,8);fpGlow.position.y=0.5;world.firepit.add(fpGlow);
+world.firepit.position.set(-5,0,10);scene.add(world.firepit);
+
+world.swing=new THREE.Group();
+const swP1=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,4),new THREE.MeshStandardMaterial({color:0x4a2c17}));
+swP1.position.set(-1,2,0);world.swing.add(swP1);
+const swP2=swP1.clone();swP2.position.x=1;world.swing.add(swP2);
+const swBar=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,2.2),new THREE.MeshStandardMaterial({color:0x4a2c17}));
+swBar.rotation.z=Math.PI/2;swBar.position.y=4;world.swing.add(swBar);
+world.swing.position.set(0,0,-15);scene.add(world.swing);
+
+// BIKE — rideable
+world.bike=new THREE.Group();
+const bikeFrame=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.5,0.2),new THREE.MeshStandardMaterial({color:0x1133ff}));
+bikeFrame.position.y=0.6;world.bike.add(bikeFrame);
+const bwMat=new THREE.MeshStandardMaterial({color:0x222222});
+const bw1=new THREE.Mesh(new THREE.TorusGeometry(0.45,0.08,8,16),bwMat);
+bw1.rotation.y=Math.PI/2;bw1.position.set(-0.7,0.45,0);
