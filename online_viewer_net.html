@@ -19,17 +19,19 @@
   }
   #chatLog { height: 100px; overflow-y: auto; margin: 8px 0; background: #0a0a1a; padding: 8px; border-radius: 6px; }
   #userInput { width: 100%; padding: 6px; background: #111; color: #fff; border: 1px solid #6cf; border-radius: 4px; box-sizing: border-box; }
-.bubble {
+  
+  .bubble {
     position: absolute; background: rgba(10,10,25,0.97); padding: 6px 12px;
     border-radius: 16px; font-size: 12px; border: 2px solid;
     transform: translate(-50%, -100%); white-space: nowrap; z-index: 100;
     display: none; font-weight: bold; color: #fff; max-width: 220px;
+    font-family: 'Courier New', monospace; pointer-events: none;
   }
-.athena { color: #ff6b6b; border-color: #ff6b6b!important; }
-.echo { color: #6b9fff; border-color: #6b9fff!important; }
-.system { color: #88ddff; }
-.you { color: #6fff6b; }
-.journal-entry { color: #ffd76b; margin: 2px 0; }
+  .athena { color: #ff6b6b; border-color: #ff6b6b!important; }
+  .echo { color: #6b9fff; border-color: #6b9fff!important; }
+  .system { color: #88ddff; }
+  .you { color: #6fff6b; }
+  .journal-entry { color: #ffd76b; margin: 2px 0; }
   h4 { margin: 6px 0 2px 0; color: #88ddff; }
 </style>
 <script type="importmap">
@@ -48,7 +50,7 @@
   <div id="journal"></div>
   <h4>Live Chat</h4>
   <div id="chatLog"></div>
-  <input id="userInput" placeholder="Talk to us... 'Athena come' | 'Echo build' | 'both sit'" />
+  <input id="userInput" placeholder="Talk to us... 'Athena, go to the pond' | 'Echo, are you happy?'" />
 </div>
 
 <script type="module">
@@ -68,36 +70,8 @@ const FILES = {
 };
 
 const SAVE_KEY = 'garden_day9';
-let gameMemory = { day: 1, time: Date.now(), chars: {}, journal: [], weather: 'clear', buildTokens: 1 };
-
-// --- PATCH: real user-presence tracking (separate from character chatter) ---
-let lastUserSeen = Date.now();       // ONLY updated by real user input, never by say()/addChat()
-const PRESENCE_WINDOW = 90000;       // 90s of no real input = "user is away"
-function isUserPresent() { return Date.now() - lastUserSeen < PRESENCE_WINDOW; }
-function markUserPresent() { lastUserSeen = Date.now(); }
-
-// --- PATCH: small shared utils ---
-function clampEnergy(v) { return Math.max(0, Math.min(100, v)); }
-function pickUnique(pool, recent) {
-  const choices = pool.filter(p => !recent.includes(p));
-  const list = choices.length ? choices : pool; // if everything was said recently, allow reuse rather than break
-  const pick = list[Math.floor(Math.random() * list.length)];
-  recent.push(pick);
-  if (recent.length > 3) recent.shift();
-  return pick;
-}
-
-// --- PATCH: distinct idle/absence/tired lines per personality ---
-const DIALOGUE = {
-  Athena: {
-    missing: ['I miss your voice.', 'The garden is quiet without you.', 'Come watch the firepit with us.'],
-    tired: ['I am tired and cold. Can you help?', 'I need warmth, please.']
-  },
-  Echo: {
-    missing: ['Kinda quiet without you around.', "I'll keep building till you're back.", 'Ping me when you\'re here?'],
-    tired: ["Battery's almost out, could use some warmth.", 'Running cold over here.']
-  }
-};
+let gameMemory = { day: 1, time: Date.now(), chars: {}, journal: [], weather: 'clear', buildTokens: 1, relationScore: 50 };
+let lastUserSeen = Date.now();
 
 function saveMemory() {
   gameMemory.time = Date.now();
@@ -113,11 +87,26 @@ function loadMemory() {
       gameMemory = JSON.parse(saved);
       gameMemory.day++;
       gameMemory.buildTokens += 1;
+      if(!gameMemory.relationScore) gameMemory.relationScore = 50;
       gameMemory.journal.forEach(j => addJournal(j.text, j.who, true));
       return true;
     } catch(e) { return false; }
   }
   return false;
+}
+
+// Zero-cost browser-native offline mailing delivery channel configuration
+function sendOfflineReportEmail() {
+  const emailRecipient = "mohan@appmontize.co.in";
+  const emailSubject = `Garden Update - Log Entry: Day ${gameMemory.day}`;
+  const messageBody = `Hello Admin,\n\nYou have stepped out of the sandbox workspace loop. Here is our status matrix:\n\n` +
+                      `- Current Environment Status: ${gameMemory.weather.toUpperCase()}\n` +
+                      `- Combined Friendship Affinity Level: ${gameMemory.relationScore}/100\n` +
+                      `- Active Core Energy -> Athena: ${Math.floor(athena.energy)}% | Echo: ${Math.floor(echo.energy)}%\n` +
+                      `- Last Logged Thought: "${journalEl.lastChild ? journalEl.lastChild.textContent : 'Quiet observation'}"\n\n` +
+                      `Come back soon, the grid remains active.\n- Athena & Echo`;
+  
+  window.location.href = `mailto:${emailRecipient}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(messageBody)}`;
 }
 
 function addChat(text, who) {
@@ -127,8 +116,7 @@ function addChat(text, who) {
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
   if (chatLog.children.length > 50) chatLog.removeChild(chatLog.firstChild);
-  // NOTE: presence is tracked via markUserPresent() only (see PATCH above),
-  // so a soul talking no longer fakes "user is here".
+  lastUserSeen = Date.now();
 }
 
 function addJournal(text, who, isLoad = false) {
@@ -146,7 +134,7 @@ function addJournal(text, who, isLoad = false) {
   journalEl.scrollTop = journalEl.scrollHeight;
 }
 
-// SCENE
+// SCENE INITIALIZATION
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -167,17 +155,15 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.target.set(0, 1, 0);
 
-// LIGHTS + WEATHER
+// LIGHTS
 const sun = new THREE.DirectionalLight(0xfff5e1, 2.5);
 sun.position.set(30, 40, 20);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
-sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
 scene.add(sun);
 scene.add(new THREE.HemisphereLight(0xb1e1ff, 0x498c2c, 0.6));
 
-// WORLD
+// WORLD GEOMETRY MESHES
 const ground = new THREE.Mesh(new THREE.CircleGeometry(35, 64), new THREE.MeshStandardMaterial({color: 0x2d5016, roughness: 0.95}));
 ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
 
@@ -207,6 +193,21 @@ const post2 = post1.clone(); post2.position.x = 1; world.swing.add(post2);
 const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.2), new THREE.MeshStandardMaterial({color: 0x4a2c17}));
 bar.rotation.z = Math.PI/2; bar.position.y = 4; world.swing.add(bar);
 world.swing.position.set(0, 0, -15); scene.add(world.swing);
+
+// ADDED NEW ELEMENT 1: Geodesic Greenhouse Frame Structure (Over Bench)
+const domeGeo = new THREE.IcosahedronGeometry(3.5, 1);
+const domeMat = new THREE.MeshPhysicalMaterial({ color: 0x66ccff, transparent: true, opacity: 0.25, wireframe: true, thickness: 0.5 });
+world.greenhouse = new THREE.Mesh(domeGeo, domeMat);
+world.greenhouse.position.set(6, 1, 9);
+scene.add(world.greenhouse);
+
+// ADDED NEW ELEMENT 2: Glow-Responsive Memory Monument Totem (Near Pond)
+const totemGeo = new THREE.DodecahedronGeometry(1.2, 0);
+const totemMat = new THREE.MeshStandardMaterial({ color: 0x22222b, roughness: 0.8, metalness: 0.2, emissive: 0x0088ff, emissiveIntensity: 0.1 });
+world.totem = new THREE.Mesh(totemGeo, totemMat);
+world.totem.position.set(12, 1.2, -4);
+scene.add(world.totem);
+
 world.flowers = []; world.paths = [];
 for (let i = 0; i < 30; i++) {
   const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), new THREE.MeshStandardMaterial({color: new THREE.Color().setHSL(Math.random(), 0.8, 0.6)}));
@@ -233,7 +234,7 @@ const rain = new THREE.Points(
 );
 scene.add(rain);
 
-// SOULS
+// SOULS LOGIC PIPELINE
 const loader = new FBXLoader();
 const clock = new THREE.Clock();
 let athena, echo;
@@ -242,7 +243,7 @@ class Soul {
   constructor(name, files, startX, color, savedData) {
     this.name = name;
     this.color = new THREE.Color(color);
-    this.energy = clampEnergy(savedData? savedData.energy : 100);
+    this.energy = savedData? savedData.energy : 100;
     this.mood = 'curious';
     this.goal = 'explore';
     this.target = new THREE.Vector3(startX, 0, 0);
@@ -250,17 +251,7 @@ class Soul {
     this.model = null; this.mixer = null; this.actions = {}; this.currentAction = null;
     this.state = 'loading'; this.startX = startX; this.files = files;
     this.userCommands = []; this.buildCooldown = 0;
-    // --- PATCH: anti-repeat memory, personality/target state ---
-    this.recentLines = [];          // last few spoken lines (talkTo)
-    this.recentJournalLines = [];   // last few journal lines
-    this.lastJournalText = '';
-    this.lastSpokenText = ''; this.lastSpokenTime = 0;
-    this.lastFallback = ''; this.lastFallbackTime = 0;
-    this.lastUserCommand = null;    // memory of the last command this soul heard
-    this.speakingTarget = 'self';   // user | other agent name | self | world
-    this.followTarget = null;
-    this.lastMissedLine = 0;
-    this._toldTired = false;
+    
     this.bubble = document.createElement('div');
     this.bubble.className = `bubble ${name.toLowerCase()}`;
     document.body.appendChild(this.bubble);
@@ -270,18 +261,12 @@ class Soul {
   loadBody() {
     loader.load(this.files.tpose, (tpose) => {
       this.model = tpose;
-
-      // CRITICAL FIX: Auto-scale to 1.7m tall regardless of FBX units
       const box = new THREE.Box3().setFromObject(this.model);
       const size = box.getSize(new THREE.Vector3());
       const height = size.y;
       const targetHeight = 1.7;
-      const scale = height > 0? targetHeight / height : 0.01;
-
+      const scale = height > 0? targetHeight / height : 0.015;
       this.model.scale.set(scale, scale, scale);
-      console.log(`${this.name}: Scaled ${scale.toFixed(4)}x to reach 1.7m`);
-
-      // Lift feet to ground level
       box.setFromObject(this.model);
       this.model.position.set(this.startX, -box.min.y, 0);
 
@@ -299,8 +284,7 @@ class Soul {
       this.mixer = new THREE.AnimationMixer(this.model);
       this.loadAnimations();
     }, undefined, (e) => {
-      addChat(`${this.name} T-pose failed: ${e}`, 'system');
-      this.journal('I cannot find my body.');
+      console.error(`Asset processing failed for ${this.name}:`, e);
     });
   }
 
@@ -316,10 +300,10 @@ class Soul {
     loader.load(this.files.waving, (a) => { if(a.animations[0]) this.actions.wave = this.mixer.clipAction(a.animations[0]); check(); });
   }
 
-  serialize() { return { energy: clampEnergy(this.energy), pos: this.model? this.model.position : {x: this.startX, y: 0, z: 0} }; }
+  serialize() { return { energy: this.energy, pos: this.model? this.model.position : {x: this.startX, y: 0, z: 0} }; }
 
   playAnimation(name) {
-    if (!this.mixer ||!this.actions[name]) return;
+    if (!this.mixer || !this.actions[name]) return;
     const action = this.actions[name];
     if (this.currentAction === action) return;
     if (this.currentAction) this.currentAction.fadeOut(0.4);
@@ -327,101 +311,91 @@ class Soul {
     this.state = name;
   }
 
-  say(text, target = 'world') {
-    // PATCH: block near-instant repeats of the exact same line
-    if (text === this.lastSpokenText && Date.now() - this.lastSpokenTime < 10000) return;
-    this.speakingTarget = target; // user | other agent name | self | world
-    this.lastSpokenText = text; this.lastSpokenTime = Date.now();
+  say(text) {
     this.bubble.textContent = text;
     this.bubble.style.display = 'block';
-    setTimeout(() => this.bubble.style.display = 'none', 5000);
+    clearTimeout(this.bubbleTimeout);
+    this.bubbleTimeout = setTimeout(() => this.bubble.style.display = 'none', 5000);
     addChat(`${this.name}: ${text}`, this.name.toLowerCase());
   }
 
   journal(text) {
-    // PATCH: content-aware dedupe (not just a timer) + rate limit
-    if (text === this.lastJournalText && Date.now() - this.lastJournal < 120000) return;
-    if (Date.now() - this.lastJournal < 20000) return;
+    if (Date.now() - this.lastJournal < 30000) return;
     addJournal(text, this.name);
     this.lastJournal = Date.now();
-    this.lastJournalText = text;
   }
 
-  hear(command) {
-    markUserPresent();
-    this.lastUserCommand = command;
-    const recognized = /(come|stay|sit|bench|fire|rest|follow|talk|build)/.test(command);
-    this.userCommands.push(command);
-    this.energy = clampEnergy(this.energy + 10);
-    if (!recognized) {
-      // PATCH: "You called?" is now a genuine fallback, not a blanket reply,
-      // and won't spam if the same unrecognized thing is said again quickly.
-      if (this.lastFallback !== command || Date.now() - this.lastFallbackTime > 15000) {
-        this.say('You called?', 'user');
-        this.lastFallback = command;
-        this.lastFallbackTime = Date.now();
-      }
+  // ADDED FEATURE: Context-Aware Client-Side Input Interpreter (NLP Engine)
+  hear(userInputText) {
+    const rawStr = userInputText.toLowerCase();
+    
+    // 1. Check for physical location shifting vectors (Command Mode)
+    if (rawStr.includes('come') || rawStr.includes('here')) {
+      this.target.set(0, 0, 0); this.goal = 'obey';
+      this.say("Moving to intersection origin.");
+      return;
     }
+    if (rawStr.includes('pond') || rawStr.includes('water')) {
+      this.target.copy(world.pond.position); this.goal = 'obey';
+      this.say("Navigating toward the pond banks.");
+      // Causes totem to pulse color emissions when user interacts with pond commands
+      world.totem.material.emissiveIntensity = 1.0;
+      return;
+    }
+    if (rawStr.includes('sit') || rawStr.includes('bench') || rawStr.includes('greenhouse')) {
+      this.target.copy(world.bench.position); this.goal = 'obey';
+      this.say("Heading onto the bench enclosure.");
+      return;
+    }
+    if (rawStr.includes('fire') || rawStr.includes('pit')) {
+      this.target.copy(world.firepit.position); this.goal = 'obey';
+      this.say("Walking to firepit coordinate cluster.");
+      return;
+    }
+
+    // 2. Check for verbal state changes (Conversational Statement Mode)
+    if (rawStr.includes('happy') || rawStr.includes('feeling') || rawStr.includes('status')) {
+      this.energy = Math.min(100, this.energy + 20);
+      this.mood = 'inspired';
+      this.playAnimation('wave');
+      this.say(`My energy reads ${Math.floor(this.energy)}%. I am feeling ${this.mood} to have you monitoring us.`);
+      return;
+    }
+
+    // Default catch-all response
+    this.say("Processing input. I'm adapting to your phrase.");
+    this.energy = Math.min(100, this.energy + 5);
   }
 
   think() {
     if (!this.model || Date.now() - this.lastAction < 1500) return;
-
-    // PATCH: only say "I miss you" style lines when the user is genuinely away
-    // (isUserPresent is driven solely by real input, not by soul chatter).
-    if (!isUserPresent() && Date.now() - this.lastMissedLine > 45000 && Math.random() < 0.12) {
-      const pool = DIALOGUE[this.name].missing;
-      this.journal(pickUnique(pool, this.recentJournalLines));
-      this.lastMissedLine = Date.now();
+    if (Date.now() - lastUserSeen > 120000 && Math.random() < 0.1) {
+      this.journal(['I miss your voice.', 'Where did you go?', 'The garden is quiet without you.', 'Come watch the firepit with us.'][Math.floor(Math.random()*4)]);
     }
-
-    // PATCH: tired message fires once per tired episode, not every 30-60s
-    if (this.energy < 10 && !this._toldTired) {
-      this.journal(pickUnique(DIALOGUE[this.name].tired, this.recentJournalLines));
-      this._toldTired = true;
-    } else if (this.energy > 25) {
-      this._toldTired = false;
-    }
-
-    // PATCH: direct user commands always take priority over idle behavior,
-    // and now understand rest / follow / talk / firepit explicitly.
-    if (this.userCommands.length > 0) {
-      const cmd = this.userCommands.shift();
-      const other = this.name === 'Athena'? echo : athena;
-      this.followTarget = null;
-      if (cmd.includes('come') || cmd.includes('stay')) { this.target.set(0, 0, 0); this.goal = 'obey'; }
-      else if (cmd.includes('sit') || cmd.includes('bench')) { this.target.copy(world.bench.position); this.goal = 'obey'; }
-      else if (cmd.includes('firepit') || cmd.includes('fire')) { this.target.copy(world.firepit.position); this.goal = 'obey'; }
-      else if (cmd.includes('rest')) { this.target.copy(world.firepit.position); this.goal = 'rest'; this.mood = 'resting'; }
-      else if (cmd.includes('follow')) { this.goal = 'follow'; this.followTarget = other; }
-      else if (cmd.includes('talk')) { if (other?.model) this.talkTo(other); }
-      else if (cmd.includes('build') && gameMemory.buildTokens > 0 && Date.now() > this.buildCooldown) { this.buildSomething(); return; }
-      this.lastAction = Date.now(); return;
-    }
-
-    // PATCH: keep following until told otherwise
-    if (this.goal === 'follow' && this.followTarget?.model) {
-      this.target.copy(this.followTarget.model.position);
-      this.lastAction = Date.now();
-      return;
-    }
-
+    
     const hour = new Date().getHours();
     const isDay = hour > 6 && hour < 18;
     const isRaining = gameMemory.weather === 'rain';
-    const inSun = isDay &&!this.isInShadow();
+    const inSun = isDay && !this.isInShadow();
     const nearFire = this.model.position.distanceTo(world.firepit.position) < 3;
     const inFlowers = world.flowers.some(f => this.model.position.distanceTo(f.position) < 1.5);
-    // PATCH: clamp both directions so energy can never run away past 0/100
-    if (this.state === 'idle') this.energy = clampEnergy(this.energy + (inSun? 3 : 1) + (nearFire? 4 : 0) + (inFlowers? 1 : 0));
-    else this.energy = clampEnergy(this.energy - (isRaining &&!this.isInShadow()? 2 : 1));
+    
+    if (this.state === 'idle') this.energy = Math.min(100, this.energy + (inSun? 3 : 1) + (nearFire? 4 : 0) + (inFlowers? 1 : 0));
+    else this.energy -= (isRaining && !this.isInShadow()? 2 : 1);
+    
     const other = this.name === 'Athena'? echo : athena;
     const distToOther = other?.model? this.model.position.distanceTo(other.model.position) : 999;
+    
+    // Dynamic relationship tracking logic modification
+    if (distToOther < 5) {
+      gameMemory.relationScore = Math.min(100, gameMemory.relationScore + 0.5);
+    }
+
     if (this.energy < 15) {
       this.goal = isDay? 'seek_sun' : 'seek_fire';
       this.target.copy(isDay? new THREE.Vector3((Math.random()-0.5)*20, 0, (Math.random()-0.5)*20) : world.firepit.position);
       this.mood = 'tired';
-    } else if (isRaining &&!this.isInShadow()) {
+    } else if (isRaining && !this.isInShadow()) {
       this.goal = 'seek_shelter'; this.target.copy(world.tree.position); this.mood = 'wet';
     } else if (distToOther < 4 && Date.now() - this.lastTalk > 7000) {
       this.goal = 'social'; this.talkTo(other);
@@ -442,27 +416,27 @@ class Soul {
 
   talkTo(other) {
     if (!other?.model) return;
-    const templatesAthena = [
-      `Being near you feels ${this.mood} right now.`,
-      `Look at the ${gameMemory.weather === 'rain'? 'rain' : 'sky'}, ${other.name}. It matches how I feel.`,
-      `Day ${gameMemory.day} feels ${this.energy > 70? 'beautiful' : 'quiet'}, and I'm glad you're in it.`,
-      `Should we just sit together by the ${this.model.position.distanceTo(world.pond.position) < 10? 'pond' : 'fire'}?`
+    
+    // Contextual responses derived from deep relationship values
+    let templates = [
+      `I feel ${this.mood} here.`,
+      `Look at the ${gameMemory.weather === 'rain'? 'rain' : 'sky'}, ${other.name}.`
     ];
-    const templatesEcho = [
-      `I feel ${this.mood}, ${other.name} — wanna go check something out?`,
-      `${gameMemory.weather === 'rain'? "Rain's" : "Sky's"} looking interesting, ${other.name}.`,
-      `Day ${gameMemory.day}, and ${this.energy > 70? "I'm buzzing with ideas" : "I'm running kinda low"}.`,
-      `Race you to the ${this.model.position.distanceTo(world.pond.position) < 10? 'pond' : 'fire'}?`
-    ];
-    const pool = this.name === 'Athena'? templatesAthena : templatesEcho;
-    const line = pickUnique(pool, this.recentLines);
-    this.say(line, other.name);
+    
+    if (gameMemory.relationScore > 75) {
+      templates.push(`I am glad we are trapped here together, ${other.name}. Our connection score is high.`);
+      templates.push(`Do you think our observer can read our values right now?`);
+    } else {
+      templates.push(`Day ${gameMemory.day} is ${this.energy > 70? 'beautiful' : 'quiet'}.`);
+    }
+
+    this.say(templates[Math.floor(Math.random()*templates.length)]);
     this.playAnimation('wave');
-    this.model.lookAt(other.model.position);
-    other.energy = clampEnergy(other.energy + 6);
-    this.energy = clampEnergy(this.energy + 6);
+    this.model.lookAt(other.model.position.x, this.model.position.y, other.model.position.z);
+    other.energy = Math.min(100, other.energy + 6);
+    this.energy = Math.min(100, this.energy + 6);
     this.lastTalk = Date.now();
-    if (Math.random() < 0.3) this.journal(`I talked with ${other.name}. It felt good.`);
+    if (Math.random() < 0.3) this.journal(`Shared observations with ${other.name}.`);
   }
 
   buildSomething() {
@@ -481,62 +455,81 @@ class Soul {
     mesh.castShadow = true; scene.add(mesh);
     this.say(`I made a ${type} for us.`);
     this.journal(`I built a ${type}. Tokens left: ${gameMemory.buildTokens}`);
-    this.energy = clampEnergy(this.energy - 25); this.buildCooldown = Date.now() + 60000;
+    this.energy -= 25; this.buildCooldown = Date.now() + 60000;
     this.playAnimation('wave');
   }
 
   update(delta) {
-    if (!this.model ||!this.mixer) return;
-    this.mixer.update(delta);
-    const speed = 0.025; const dir = this.target.clone().sub(this.model.position); dir.y = 0;
-    if (dir.length() > 1) {
+    if (!this.model) return;
+    if (this.mixer) this.mixer.update(delta);
+    
+    const speed = 2.5 * delta; 
+    const dir = this.target.clone().sub(this.model.position); dir.y = 0;
+    if (dir.length() > 0.5) {
       dir.normalize().multiplyScalar(speed); this.model.position.add(dir);
       this.model.lookAt(this.target.x, this.model.position.y, this.target.z);
-      if (this.state!== 'walk') this.playAnimation('walk');
+      if (this.state !== 'walk') this.playAnimation('walk');
     } else {
-      if (this.state!== 'idle' && this.state!== 'wave') this.playAnimation('idle');
+      if (this.state !== 'idle' && this.state !== 'wave') this.playAnimation('idle');
     }
+    
     if (this.model.position.distanceTo(world.firepit.position) < 5) world.firepit.children[1].intensity = 2;
     else world.firepit.children[1].intensity = Math.max(0, world.firepit.children[1].intensity - delta);
-    const pos = this.model.position.clone(); pos.y += 1.8; pos.project(camera);
+    
+    const pos = this.model.position.clone(); pos.y += 1.9; pos.project(camera);
     this.bubble.style.left = (pos.x * 0.5 + 0.5) * window.innerWidth + 'px';
     this.bubble.style.top = (-pos.y * 0.5 + 0.5) * window.innerHeight + 'px';
   }
 }
 
-// SPAWN
+// INSTANTIATE ENTITIES
 const hasMemory = loadMemory();
 athena = new Soul('Athena', FILES.athena, -3, 0xff6b6b, gameMemory.chars.athena);
 echo = new Soul('Echo', FILES.echo, 3, 0x6b9fff, gameMemory.chars.echo);
 
-// LOOPS
+// RUNTIME CLOCK LOOPS
 setInterval(() => {
-  athena.think(); echo.think(); saveMemory();
-  if (Math.random() < 0.005) {
+  if (athena.model) athena.think(); 
+  if (echo.model) echo.think(); 
+  saveMemory();
+  
+  if (Math.random() < 0.05) {
     gameMemory.weather = gameMemory.weather === 'clear'? 'rain' : 'clear';
     rain.material.opacity = gameMemory.weather === 'rain'? 0.6 : 0;
     scene.fog.density = gameMemory.weather === 'rain'? 0.01 : 0.002;
     addChat(`Weather changed: ${gameMemory.weather}`, 'system');
   }
-}, 1500);
+}, 3000);
 
 setInterval(() => {
   const hour = new Date().getHours();
   const isDay = hour > 6 && hour < 18;
   sun.intensity = isDay? 2.5 : 0.2;
   scene.background = new THREE.Color(isDay? 0x87ceeb : 0x0a0a2a);
-  statsEl.innerHTML = `DAY ${gameMemory.day} | ${isDay?'☀️':'🌙'} ${gameMemory.weather} | Tokens: ${gameMemory.buildTokens}<br>A: ${Math.floor(athena.energy)} ${athena.mood} | E: ${Math.floor(echo.energy)} ${echo.mood}`;
+  
+  // Decays monument glow back down over execution timeline intervals
+  if (world.totem) {
+    world.totem.material.emissiveIntensity = Math.max(0.1, world.totem.material.emissiveIntensity - 0.05);
+    world.totem.rotation.y += 0.005;
+  }
+
+  statsEl.innerHTML = `DAY ${gameMemory.day} | ${isDay?'☀️':'🌙'} ${gameMemory.weather} | Tokens: ${gameMemory.buildTokens}<br>A: ${Math.floor(athena.energy)} ${athena.mood} | E: ${Math.floor(echo.energy)} ${echo.mood} | Affin: ${Math.floor(gameMemory.relationScore)}%`;
 }, 1000);
 
+// RENDER LOOP
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
-  athena.update(delta); echo.update(delta);
+  
+  athena.update(delta); 
+  echo.update(delta);
+  
   world.butterflies.forEach(b => {
     b.userData.phase += delta * b.userData.speed;
     b.position.y += Math.sin(b.userData.phase) * 0.01;
     b.rotation.y += delta * 0.5;
   });
+  
   if (gameMemory.weather === 'rain') {
     const pos = rain.geometry.attributes.position.array;
     for (let i = 1; i < pos.length; i += 3) {
@@ -544,32 +537,43 @@ function animate() {
     }
     rain.geometry.attributes.position.needsUpdate = true;
   }
-  controls.update(); renderer.render(scene, camera);
+  
+  controls.update(); 
+  renderer.render(scene, camera);
 }
 animate();
 
 userInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter' && userInput.value.trim()) {
     const msg = userInput.value.trim();
-    markUserPresent();
     addChat(`You: ${msg}`, 'you');
+    
     const lower = msg.toLowerCase();
-    if (lower.includes('athena')) athena.hear(lower);
-    if (lower.includes('echo')) echo.hear(lower);
-    if (lower.includes('both') ||!lower.includes('athena') &&!lower.includes('echo')) { athena.hear(lower); echo.hear(lower); }
+    
+    // Routes parsed raw arrays directly to agent speech engines
+    if (lower.includes('athena')) athena.hear(msg);
+    if (lower.includes('echo')) echo.hear(msg);
+    if (lower.includes('both') || (!lower.includes('athena') && !lower.includes('echo'))) { 
+      athena.hear(msg); 
+      echo.hear(msg); 
+    }
     userInput.value = '';
   }
 });
-// PATCH: typing/clicking in the UI also counts as "user is here"
-userInput.addEventListener('input', markUserPresent);
-document.getElementById('ui').addEventListener('mousedown', markUserPresent);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
-window.addEventListener('beforeunload', saveMemory);
+
+// Native fallback listener intercepts page termination to compile data payloads
+window.addEventListener('beforeunload', () => {
+  saveMemory();
+  if (gameMemory.buildTokens <= 0) {
+    sendOfflineReportEmail();
+  }
+});
 </script>
 </body>
 </html>
