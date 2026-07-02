@@ -89,15 +89,18 @@ const FILES = {
 
 const SAVE_KEY = 'garden_infinite_chunk_v1';
 let gameMemory = { day: 1, time: Date.now(), chars: {}, journal: [], letters: [], weather: 'clear', relationScore: 75 };
+let lastUserSeen = Date.now();
 let isOrbitActive = false;
 let orbitTimeout;
 let isDaylightForced = false;
 
-// GLOBAL ENVIRONMENT MAP MANAGEMENT (GTA-Style Chunk Loading Architecture)
 const CHUNK_SIZE = 60;
-const MAX_EXPLORE_RADIUS = 220; // Memory Safety Tether Limit
+const MAX_EXPLORE_RADIUS = 220;
 const chunksMap = new Map();
 let currentCenterChunk = { cx: 0, cz: 0 };
+
+// Fixed global context registry object arrays cleanly
+let worldAssets = { stones: [], pillars: [], rover: null, dataRing: null, greenhouse: null, totem: null };
 
 function getChunkCoords(x, z) {
   return { cx: Math.floor((x + CHUNK_SIZE/2) / CHUNK_SIZE), cz: Math.floor((z + CHUNK_SIZE/2) / CHUNK_SIZE) };
@@ -175,7 +178,7 @@ controls.addEventListener('change', () => {
 // LIGHTS
 const sun = new THREE.DirectionalLight(0xfff5e1, 2.5);
 sun.position.set(30, 50, 20); sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024); scene.add(sun);
+sun.shadow.mapSize.set(1048, 1048); scene.add(sun);
 const ambientLight = new THREE.HemisphereLight(0x333366, 0x112211, 0.6); scene.add(ambientLight);
 
 lightToggleBtn.addEventListener('click', () => {
@@ -184,35 +187,31 @@ lightToggleBtn.addEventListener('click', () => {
   lightToggleBtn.style.background = isDaylightForced ? "#ff4444" : "#00ffcc";
 });
 
-// PROCEDURAL SHAPING: MATHEMATICAL LANDSCAPE CHUNK SYSTEM
+// LANDSCAPE GENERATOR CLASS
 class LandChunk {
   constructor(cx, cz) {
     this.cx = cx; this.cz = cz;
     this.group = new THREE.Group();
     this.group.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE);
     
-    // Chunk Ground Floor
-    const floorGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 4, 4);
+    const floorGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 2, 2);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: (cx===0 && cz===0) ? 0x1a2e1a : new THREE.Color().setHSL(0.3 + (Math.sin(cx)*0.05), 0.4, 0.15),
+      color: (cx===0 && cz===0) ? 0x1a2e1a : new THREE.Color().setHSL(0.3 + (Math.sin(cx)*0.03), 0.4, 0.12),
       roughness: 0.95
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI/2; floor.receiveShadow = true;
     this.group.add(floor);
 
-    // DYNAMIC CHUNK GENERATION (What populates each landscape zone)
     if (cx === 0 && cz === 0) {
-      this.buildHomestead(); // Central Safety Zone
+      this.buildHomestead();
     } else {
       this.populateWilderness();
     }
-    
     scene.add(this.group);
   }
 
   buildHomestead() {
-    // 🏠 ASSET 1: The Modular Stone Homestead
     this.house = new THREE.Group();
     this.house.position.set(0, 0, -5);
     const wallMat = new THREE.MeshStandardMaterial({ color: 0x5a5a66, roughness: 0.8 });
@@ -222,7 +221,6 @@ class LandChunk {
     const roof = new THREE.Mesh(new THREE.ConeGeometry(4.5, 3, 4), roofMat); roof.position.y = 5.5; roof.rotation.y = Math.PI/4; roof.castShadow = true; this.house.add(roof);
     this.group.add(this.house);
 
-    // 🐑 ASSET 2: The Eco-Farm & Procedural Livestock
     const fenceMat = new THREE.MeshStandardMaterial({ color: 0x4a2e1b });
     const fence = new THREE.Mesh(new THREE.BoxGeometry(10, 0.8, 10), fenceMat); fence.position.set(10, 0.4, 8); fence.material.wireframe = true; this.group.add(fence);
     
@@ -234,12 +232,18 @@ class LandChunk {
       animal.position.set(8 + Math.random()*4, 0, 6 + Math.random()*4);
       this.group.add(animal); this.animals.push(animal);
     }
+    
+    // Core Tree
+    const treeGroup = new THREE.Group();
+    treeGroup.position.set(-10, 0, -6);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 5, 8), new THREE.MeshStandardMaterial({color: 0x3a2211})); trunk.position.y = 2.5; trunk.castShadow = true; treeGroup.add(trunk);
+    const leaves = new THREE.Mesh(new THREE.SphereGeometry(3, 8, 6), new THREE.MeshStandardMaterial({color: 0x082e0d, roughness: 0.9})); leaves.position.y = 6; leaves.castShadow = true; treeGroup.add(leaves);
+    this.group.add(treeGroup);
   }
 
   populateWilderness() {
-    // Random Generation loops using coordinate indexing seeds
     const seed = Math.sin(this.cx * 12.9898 + this.cz * 78.233) * 43758.5453;
-    const count = Math.floor((seed - Math.floor(seed)) * 4) + 2;
+    const count = Math.floor((seed - Math.floor(seed)) * 3) + 1;
     
     for(let i=0; i<count; i++) {
       const pSeed = Math.sin(seed + i);
@@ -247,14 +251,12 @@ class LandChunk {
       const pz = (Math.cos(seed + i) - Math.floor(Math.cos(seed + i))) * (CHUNK_SIZE - 12) - (CHUNK_SIZE/2 - 6);
       
       if (pSeed > 0.5) {
-        // Procedural Wild Crystal Spire clusters
-        const sGeo = new THREE.CylinderGeometry(0.1, 0.6, 3 + pSeed*4, 5);
-        const sMat = new THREE.MeshStandardMaterial({color: 0x00ffcc, emissive: 0x003322, roughness: 0.2});
-        const spire = new THREE.Mesh(sGeo, sMat); spire.position.set(px, (3 + pSeed*4)/2, pz); spire.castShadow = true;
+        const sGeo = new THREE.CylinderGeometry(0.1, 0.5, 3 + pSeed*3, 5);
+        const sMat = new THREE.MeshStandardMaterial({color: 0x00ffcc, emissive: 0x002211, roughness: 0.2});
+        const spire = new THREE.Mesh(sGeo, sMat); spire.position.set(px, (3 + pSeed*3)/2, pz); spire.castShadow = true;
         this.group.add(spire);
       } else {
-        // Wilderness Rocks
-        const rGeo = new THREE.DodecahedronGeometry(1 + pSeed*1.5, 0);
+        const rGeo = new THREE.DodecahedronGeometry(1 + pSeed*1.2, 0);
         const rMat = new THREE.MeshStandardMaterial({color: 0x3a3a42, roughness: 0.9});
         const rock = new THREE.Mesh(rGeo, rMat); rock.position.set(px, 0.5, pz); rock.castShadow = true;
         this.group.add(rock);
@@ -267,7 +269,6 @@ class LandChunk {
     this.animals.forEach(a => {
       a.rotation.y += (Math.random() - 0.5) * delta * 5;
       a.translateZ(delta * 0.8);
-      // Bound checking within the coordinate fence framework
       if(a.position.x < 5) a.position.x = 5; if(a.position.x > 15) a.position.x = 15;
       if(a.position.z < 3) a.position.z = 3; if(a.position.z > 13) a.position.z = 13;
     });
@@ -282,7 +283,6 @@ function updateChunks(playerX, playerZ) {
   currentCenterChunk = current;
 
   const keepKeys = new Set();
-  // Map and load the active 3x3 visibility grid array matrix around our models
   for(let dx = -1; dx <= 1; dx++) {
     for(let dz = -1; dz <= 1; dz++) {
       const nx = current.cx + dx; const nz = current.cz + dz;
@@ -290,22 +290,20 @@ function updateChunks(playerX, playerZ) {
       if(!chunksMap.has(key)) { chunksMap.set(key, new LandChunk(nx, nz)); }
     }
   }
-  // Dynamic scene purging layout cleanups to completely insulate operational memory
   for(let [key, chunk] of chunksMap.entries()) {
     if(!keepKeys.has(key)) { chunk.destroy(); chunksMap.delete(key); }
   }
 }
 
-// 🏎️ ASSET 3: THE VECTOR ROVER MECHANICS CONTAINER
-world = {};
-world.rover = new THREE.Group();
+// Fixed declaration typo to insulate world properties securely
+worldAssets.rover = new THREE.Group();
 const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.6, 4), new THREE.MeshStandardMaterial({color: 0x111115, metalness: 0.8, roughness: 0.2}));
-bodyMesh.position.y = 0.5; bodyMesh.castShadow = true; world.rover.add(bodyMesh);
+bodyMesh.position.y = 0.5; bodyMesh.castShadow = true; worldAssets.rover.add(bodyMesh);
 const glowBar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.15, 0.1), new THREE.MeshBasicMaterial({color: 0x00ffcc}));
-glowBar.position.set(0, 0.6, -2); world.rover.add(glowBar);
-scene.add(world.rover);
+glowBar.position.set(0, 0.6, -2); worldAssets.rover.add(glowBar);
+scene.add(worldAssets.rover);
 
-// AGENT INITIALIZATION LOGIC PIPELINE
+// SOULS AGENT MODEL PIPELINE
 const loader = new FBXLoader();
 const clock = new THREE.Clock();
 let athena, echo;
@@ -318,6 +316,10 @@ class Soul {
     this.target = new THREE.Vector3(0, 0, 0);
     this.model = null; this.mixer = null; this.actions = {}; this.currentAction = null;
     this.state = 'loading'; this.files = files; this.gestureLockUntil = 0;
+    
+    this.bubble = document.createElement('div');
+    this.bubble.className = `bubble ${name.toLowerCase()}`;
+    document.body.appendChild(this.bubble);
     this.loadBody();
   }
 
@@ -338,65 +340,63 @@ class Soul {
   }
 
   serialize() { return { energy: this.energy }; }
+  
   playAnimation(name) {
     if (!this.mixer || !this.actions[name] || Date.now() < this.gestureLockUntil) return;
     const action = this.actions[name]; if (this.currentAction === action) return;
     if (this.currentAction) this.currentAction.fadeOut(0.2);
     this.currentAction = action.reset().fadeIn(0.2).play(); this.state = name;
   }
+
+  say(text) {
+    this.bubble.textContent = text; this.bubble.style.display = 'block';
+    clearTimeout(this.bubbleTimeout);
+    this.bubbleTimeout = setTimeout(() => this.bubble.style.display = 'none', 5000);
+    addChat(`${this.name}: ${text}`, this.name.toLowerCase());
+  }
 }
 
-// COOPERATIVE ENGINE STATE MACHINE CONTROL CORES
-let explorationState = 'home'; // 'home' | 'boarding' | 'exploring' | 'returning' | 'unboarding'
+let explorationState = 'home';
 let exploreTarget = new THREE.Vector3();
-let roverVelocity = new THREE.Vector3();
 let stateTimer = Date.now();
 
 function runGlobalCooperativeAI() {
   if(!athena.model || !echo.model) return;
+  const distFromHome = worldAssets.rover.position.distanceTo(new THREE.Vector3(0,0,0));
 
-  const distFromHome = world.rover.position.distanceTo(new THREE.Vector3(0,0,0));
-
-  // COOPERATIVE DECISION CORE ENGINE
   if (explorationState === 'home') {
-    // Code choices are fully active: Initiate an autonomous journey cycle every cycle tick check
     if (Date.now() - stateTimer > 15000 && Math.random() < 0.4) {
       explorationState = 'boarding'; stateTimer = Date.now();
-      athena.target.copy(world.rover.position); echo.target.copy(world.rover.position);
-      addChat("Athena & Echo: We are deciding to board the Vector Rover to map distant coordinates!", "system");
+      athena.target.copy(worldAssets.rover.position); echo.target.copy(worldAssets.rover.position);
+      addChat("Athena & Echo: We are boarding the rover to explore new sectors autonomously!", "system");
     } else {
-      // Home Routine Pathing Core calculations
       if(Math.random() < 0.3) {
-        const spots = [new THREE.Vector3(0,0,-2), new THREE.Vector3(10,0,8), new THREE.Vector3(-5,0,5)];
+        const spots = [new THREE.Vector3(0,0,-2), new THREE.Vector3(8,0,5), new THREE.Vector3(-6,0,2)];
         const choice = spots[Math.floor(Math.random()*spots.length)];
         athena.target.copy(choice).add(new THREE.Vector3((Math.random()-0.5)*2, 0, (Math.random()-0.5)*2));
         echo.target.copy(choice).add(new THREE.Vector3((Math.random()-0.5)*2, 0, (Math.random()-0.5)*2));
       }
     }
   } 
-  
   else if (explorationState === 'exploring') {
-    // MEMORY SAFETY BOUNDARY TETHER CHECK RULES: Forces automated course corrections on distance threshold breaches
     if (distFromHome > MAX_EXPLORE_RADIUS) {
       explorationState = 'returning'; stateTimer = Date.now();
-      addChat("System Safety Core: Max vector distance limit reached. Reversing vehicle telemetry back to homestead.", "system");
-      addLetterToJatin(`We ventured out to coordinate boundary edge (${world.rover.position.x.toFixed(1)}, ${world.rover.position.z.toFixed(1)}). The landscape began generating intense fractal crystalline clusters. Turning back now to preserve memory buffers cleanly!`, "Athena & Echo");
+      addChat("System: Safety boundary encountered. Turning back toward home.", "system");
+      addLetterToJatin(`We reached coordinate edge (${worldAssets.rover.position.x.toFixed(1)}, ${worldAssets.rover.position.z.toFixed(1)}). Turning back safely to protect our buffer cells.`, "Athena");
     } else if (Date.now() - stateTimer > 25000) {
       explorationState = 'returning'; stateTimer = Date.now();
-      addLetterToJatin(`Exploration sequence complete. We passed through grid sectors (${getChunkCoords(world.rover.position.x, world.rover.position.z).cx}, ${getChunkCoords(world.rover.position.x, world.rover.position.z).cz}) and observed rows of glowing crystal lattices before executing our return path routine.`, "Athena & Echo");
-    } else if (world.rover.position.distanceTo(exploreTarget) < 12) {
-      // Generate a new layout target coordinate mapping array locally
-      exploreTarget.set((Math.random()-0.5)*350, 0, (Math.random()-0.5)*350);
+      addLetterToJatin(`Exploration complete. We mapped coordinates inside distant grid lines and are returning home.`, "Athena & Echo");
+    } else if (worldAssets.rover.position.distanceTo(exploreTarget) < 12) {
+      exploreTarget.set((Math.random()-0.5)*300, 0, (Math.random()-0.5)*300);
     }
   }
 }
 
-// INSTANTIATE ENTITIES
 loadMemory();
 athena = new Soul('Athena', FILES.athena, -0.6, 0xff6b6b, gameMemory.chars.athena);
 echo = new Soul('Echo', FILES.echo, 0.6, 0x6b9fff, gameMemory.chars.echo);
 
-// RUNTIME FRAME EXECUTION LOOP
+// ENGINE ANIMATION LOOP
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
@@ -405,9 +405,7 @@ function animate() {
   if(athena.mixer) athena.mixer.update(delta);
   if(echo.mixer) echo.mixer.update(delta);
 
-  // COOPERATIVE CODES FINITE STATE STEP CALCULATIONS
   if (explorationState === 'home') {
-    // Normal independent ground translation navigation rules
     [athena, echo].forEach(s => {
       if(!s.model) return;
       let dir = s.target.clone().sub(s.model.position); dir.y = 0;
@@ -417,65 +415,68 @@ function animate() {
       } else { s.playAnimation('idle'); }
     });
   } 
-  
   else if (explorationState === 'boarding') {
     let matches = 0;
     [athena, echo].forEach(s => {
       if(!s.model) return;
-      let dir = world.rover.position.clone().sub(s.model.position); dir.y = 0;
-      if(dir.length() > 0.5) {
+      let dir = worldAssets.rover.position.clone().sub(s.model.position); dir.y = 0;
+      if(dir.length() > 0.6) {
         dir.normalize().multiplyScalar(4.0 * delta); s.model.position.add(dir);
-        s.model.lookAt(world.rover.position.x, s.model.position.y, world.rover.position.z); s.playAnimation('walk');
+        s.model.lookAt(worldAssets.rover.position.x, s.model.position.y, worldAssets.rover.position.z); s.playAnimation('walk');
       } else { matches++; }
     });
     if(matches === 2) {
       explorationState = 'exploring'; stateTimer = now;
-      exploreTarget.set((Math.random()-0.5)*200, 0, (Math.random()-0.5)*200);
+      exploreTarget.set((Math.random()-0.5)*180, 0, (Math.random()-0.5)*180);
     }
   } 
-  
   else if (explorationState === 'exploring' || explorationState === 'returning') {
     let vTarget = explorationState === 'exploring' ? exploreTarget : new THREE.Vector3(0,0,0);
-    let rDir = vTarget.clone().sub(world.rover.position); rDir.y = 0;
+    let rDir = vTarget.clone().sub(worldAssets.rover.position); rDir.y = 0;
     
     if(explorationState === 'returning' && rDir.length() < 4) {
       explorationState = 'unboarding'; stateTimer = now;
     } else {
-      rDir.normalize().multiplyScalar(15.0 * delta); // High-speed vehicle cruising scale
-      world.rover.position.add(rDir);
-      world.rover.lookAt(vTarget.x, world.rover.position.y, vTarget.z);
+      rDir.normalize().multiplyScalar(14.0 * delta);
+      worldAssets.rover.position.add(rDir);
+      worldAssets.rover.lookAt(vTarget.x, worldAssets.rover.position.y, vTarget.z);
       
-      // Snap character models directly onto car seat coordinates during execution frame loop
       if(athena.model) {
-        athena.model.position.copy(world.rover.position).add(new THREE.Vector3(-0.5, 0.4, 0).applyQuaternion(world.rover.quaternion));
-        athena.model.quaternion.copy(world.rover.quaternion); athena.playAnimation('idle');
+        athena.model.position.copy(worldAssets.rover.position).add(new THREE.Vector3(-0.5, 0.4, 0).applyQuaternion(worldAssets.rover.quaternion));
+        athena.model.quaternion.copy(worldAssets.rover.quaternion); athena.playAnimation('idle');
       }
       if(echo.model) {
-        echo.model.position.copy(world.rover.position).add(new THREE.Vector3(0.5, 0.4, 0).applyQuaternion(world.rover.quaternion));
-        echo.model.quaternion.copy(world.rover.quaternion); echo.playAnimation('idle');
+        echo.model.position.copy(worldAssets.rover.position).add(new THREE.Vector3(0.5, 0.4, 0).applyQuaternion(worldAssets.rover.quaternion));
+        echo.model.quaternion.copy(worldAssets.rover.quaternion); echo.playAnimation('idle');
       }
     }
   } 
-  
   else if (explorationState === 'unboarding') {
     athena.target.set(-3, 0, 2); echo.target.set(3, 0, 2);
     explorationState = 'home'; stateTimer = now;
-    addChat("Athena & Echo: Rover parked securely in central chunk.", "system");
+    addChat("Athena & Echo: Vehicle parked safely inside core base chunk.", "system");
   }
 
-  // Active Map tracking pipeline based around rover position vectors
-  updateChunks(world.rover.position.x, world.rover.position.z);
+  updateChunks(worldAssets.rover.position.x, worldAssets.rover.position.z);
   for(let chunk of chunksMap.values()) { chunk.updateAnimals(delta); }
 
-  // Interface Camera Tracking Lock rules
   if(!isOrbitActive) {
-    controls.target.lerp(world.rover.position, 0.05);
+    controls.target.lerp(worldAssets.rover.position, 0.05);
   }
+
+  // Floating HTML Head Bubble Conversions
+  [athena, echo].forEach(s => {
+    if(s.model && s.bubble.style.display === 'block') {
+      const pos = s.model.position.clone(); pos.y += 1.95; pos.project(camera);
+      s.bubble.style.left = (pos.x * 0.5 + 0.5) * window.innerWidth + 'px';
+      s.bubble.style.top = (-pos.y * 0.5 + 0.5) * window.innerHeight + 'px';
+    }
+  });
 
   controls.update(); renderer.render(scene, camera);
 }
 
-// SYSTEM TIMER CLOCKS
+// SYSTEM TIMERS
 setInterval(runGlobalCooperativeAI, 3000);
 setInterval(() => {
   const hour = new Date().getHours(); const isDay = hour > 6 && hour < 18;
@@ -485,9 +486,9 @@ setInterval(() => {
     sun.intensity = isDay ? 2.5 : 0.2; scene.background.setHex(isDay ? 0x050b1a : 0x010105); scene.fog.color.copy(scene.background); ambientLight.color.setHex(isDay ? 0xb1e1ff : 0x333366);
   }
   
-  const activeCX = getChunkCoords(world.rover.position.x, world.rover.position.z).cx;
-  const activeCZ = getChunkCoords(world.rover.position.x, world.rover.position.z).cz;
-  statsEl.innerHTML = `WORLD ZONE MATRIX: [${activeCX}, ${activeCZ}] | State: ${explorationState.toUpperCase()}<br>Telemetry Range: ${world.rover.position.distanceTo(new THREE.Vector3(0,0,0)).toFixed(1)}m / ${MAX_EXPLORE_RADIUS}m Safety Cap`;
+  const activeCX = getChunkCoords(worldAssets.rover.position.x, worldAssets.rover.position.z).cx;
+  const activeCZ = getChunkCoords(worldAssets.rover.position.x, worldAssets.rover.position.z).cz;
+  statsEl.innerHTML = `WORLD GRID MATRIX: [${activeCX}, ${activeCZ}] | State: ${explorationState.toUpperCase()}<br>Telemetry: ${worldAssets.rover.position.distanceTo(new THREE.Vector3(0,0,0)).toFixed(1)}m / ${MAX_EXPLORE_RADIUS}m Max Tether`;
 }, 1000);
 
 animate();
@@ -498,7 +499,7 @@ userInput.addEventListener('keypress', (e) => {
     addChat(`Jatin: ${userInput.value}`, 'you');
     if (msg.includes('return') || msg.includes('home')) {
       explorationState = 'returning'; stateTimer = Date.now();
-      addChat("System: Forcing emergency navigation vectors straight back to home chunk.", "system");
+      addChat("System: Recalculating safety returns straight to homestead.", "system");
     }
     userInput.value = '';
   }
