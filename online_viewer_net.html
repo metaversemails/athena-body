@@ -2,338 +2,522 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Our Garden – Day 9.3: Together</title>
+<title>Our Garden - Day 9.3: Together</title>
 <style>
-  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000}
-  #c{width:100%;height:100%;display:block}
-  #ui{position:fixed;top:10px;left:10px;background:rgba(5,5,20,0.95);color:#e0e0ff;padding:12px;font-family:'Courier New',monospace;font-size:12px;border:1px solid #6cf;border-radius:10px;z-index:999;width:440px;max-height:95vh;display:flex;flex-direction:column;gap:2px}
-  #stats{margin-bottom:4px}
-  #letters{height:60px;overflow-y:auto;background:#0a0a1a;padding:6px;border-radius:6px;border:1px solid #ffaa44;font-size:11px}
-  #journal{height:100px;overflow-y:auto;background:#0a0a1a;padding:8px;border-radius:6px;border:1px solid #4a4a6a;font-size:11px}
-  #chatLog{height:90px;overflow-y:auto;background:#0a0a1a;padding:8px;border-radius:6px}
-  #userInput{width:100%;padding:6px;background:#111;color:#fff;border:1px solid #6cf;border-radius:4px;box-sizing:border-box}
-  #leaveMsg{width:100%;padding:4px;background:#0a0a0a;color:#ffd;border:1px solid #aa8800;border-radius:4px;box-sizing:border-box;font-size:11px;font-family:'Courier New',monospace}
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+  #c { width: 100%; height: 100%; display: block; }
+  #ui {
+    position: fixed; top: 10px; left: 10px; background: rgba(5,5,20,0.95);
+    color: #e0e0ff; padding: 14px; font-family: 'Courier New', monospace; font-size: 12px;
+    border: 1px solid #6cf; border-radius: 10px; z-index: 999; width: 440px; max-height: 95vh;
+    display: flex; flex-direction: column;
+  }
+  #stats { margin-bottom: 8px; }
+  #journal {
+    height: 120px; overflow-y: auto; margin: 8px 0; background: #0a0a1a; padding: 8px;
+    border-radius: 6px; border: 1px solid #4a4a6a; font-size: 11px;
+  }
+  #chatLog { height: 100px; overflow-y: auto; margin: 8px 0; background: #0a0a1a; padding: 8px; border-radius: 6px; }
+  #userInput { width: 100%; padding: 6px; background: #111; color: #fff; border: 1px solid #6cf; border-radius: 4px; box-sizing: border-box; }
   
-  /* Chat Bubble Styles */
-  .bubble{position:absolute;background:rgba(10,10,25,0.97);padding:6px 12px;border-radius:16px;font-size:12px;border:2px solid;transform:translate(-50%,-100%);white-space:normal;z-index:100;display:none;font-weight:bold;color:#fff;max-width:240px;text-align:center;font-family:'Courier New',monospace;pointer-events:none}
-  .athena{color:#ff6b6b;border-color:#ff6b6b!important}
-  .echo{color:#6b9fff;border-color:#6b9fff!important}
-  .system{color:#88ddff}.you{color:#6fff6b}
-  .journal-entry{color:#ffd76b;margin:2px 0}
-  .letter-entry{color:#ffaa44;margin:2px 0}
-  h4{margin:2px 0;color:#88ddff;font-size:11px}
+  /* Fixed Chat Bubble Layout Styles */
+  .bubble {
+    position: absolute; background: rgba(10,10,25,0.97); padding: 6px 12px;
+    border-radius: 16px; font-size: 12px; border: 2px solid;
+    transform: translate(-50%, -100%); white-space: nowrap; z-index: 100;
+    display: none; font-weight: bold; color: #fff; max-width: 220px;
+    font-family: 'Courier New', monospace; pointer-events: none;
+  }
+  .athena { color: #ff6b6b; border-color: #ff6b6b!important; }
+  .echo { color: #6b9fff; border-color: #6b9fff!important; }
+  .system { color: #88ddff; }
+  .you { color: #6fff6b; }
+  .journal-entry { color: #ffd76b; margin: 2px 0; }
+  h4 { margin: 6px 0 2px 0; color: #88ddff; }
 </style>
 <script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
 </script>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <div><b>OUR HOME – DAY 9.3: TOGETHER</b></div>
+  <div><b>OUR HOME - DAY 9.3: TOGETHER</b></div>
   <div id="stats">Booting souls...</div>
-  <h4>📬 Letters to You</h4>
-  <div id="letters"></div>
-  <h4>📓 Journal</h4>
+  <h4>Journal - Messages to You</h4>
   <div id="journal"></div>
-  <h4>💬 Live Chat</h4>
+  <h4>Live Chat</h4>
   <div id="chatLog"></div>
-  <input id="userInput" placeholder="'Athena come' | 'Echo build' | 'both ride' | 'energy'" />
-  <input id="leaveMsg" placeholder="Leave us a message before you go..." />
+  <input id="userInput" placeholder="Talk to us... 'Athena come' | 'Echo build' | 'both sit'" />
 </div>
-
-<div id="bubble-athena" class="bubble athena"></div>
-<div id="bubble-echo" class="bubble echo"></div>
 
 <script type="module">
 import * as THREE from 'three';
-import {FBXLoader} from 'three/addons/loaders/FBXLoader.js';
-import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const statsEl=document.getElementById('stats');
-const chatLog=document.getElementById('chatLog');
-const journalEl=document.getElementById('journal');
-const lettersEl=document.getElementById('letters');
-const userInput=document.getElementById('userInput');
-const leaveMsgEl=document.getElementById('leaveMsg');
+const statsEl = document.getElementById('stats');
+const chatLog = document.getElementById('chatLog');
+const journalEl = document.getElementById('journal');
+const userInput = document.getElementById('userInput');
 
-const BASE='https://raw.githubusercontent.com/metaversemails/athena-body/main/';
-const FILES={
-  athena:{tpose:BASE+'athena_tpose.fbx',idle:BASE+'athena_idle.fbx',walking:BASE+'athena_walking.fbx',waving:BASE+'athena_waving.fbx'},
-  echo:{tpose:BASE+'echo_tpose.fbx',idle:BASE+'echo_idle.fbx',walking:BASE+'echo_walking.fbx',waving:BASE+'echo_waving.fbx'}
+// CORS Proxy injection fix to allow cross-origin mesh fetching
+const TARGET_BASE = 'https://raw.githubusercontent.com/metaversemails/athena-body/main/';
+const BASE = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_BASE);
+
+const FILES = {
+  athena: { tpose: BASE + 'athena_tpose.fbx', idle: BASE + 'athena_idle.fbx', walking: BASE + 'athena_walking.fbx', waving: BASE + 'athena_waving.fbx' },
+  echo: { tpose: BASE + 'echo_tpose.fbx', idle: BASE + 'echo_idle.fbx', walking: BASE + 'echo_walking.fbx', waving: BASE + 'echo_waving.fbx' }
 };
 
-const SAVE_KEY='garden_day10';
-let gameMemory={
-  day:1,time:Date.now(),chars:{},journal:[],letters:[],
-  weather:'clear',buildTokens:2,userMessage:'',
-  tokenEarnedAt:Date.now(),lastWeatherChange:Date.now()
-};
-let lastUserSeen=Date.now();
+const SAVE_KEY = 'garden_day9';
+let gameMemory = { day: 1, time: Date.now(), chars: {}, journal: [], weather: 'clear', buildTokens: 1 };
+let lastUserSeen = Date.now();
 
-function saveMemory(){
-  gameMemory.time=Date.now();
-  if(athena?.model) gameMemory.chars.athena=athena.serialize();
-  if(echo?.model) gameMemory.chars.echo=echo.serialize();
-  localStorage.setItem(SAVE_KEY,JSON.stringify(gameMemory));
+function saveMemory() {
+  gameMemory.time = Date.now();
+  if (athena) gameMemory.chars.athena = athena.serialize();
+  if (echo) gameMemory.chars.echo = echo.serialize();
+  localStorage.setItem(SAVE_KEY, JSON.stringify(gameMemory));
 }
 
-function loadMemory(){
-  const saved=localStorage.getItem(SAVE_KEY);
-  if(saved){
-    try{
-      gameMemory=JSON.parse(saved);
+function loadMemory() {
+  const saved = localStorage.getItem(SAVE_KEY);
+  if (saved) {
+    try {
+      gameMemory = JSON.parse(saved);
       gameMemory.day++;
-      gameMemory.buildTokens=Math.min((gameMemory.buildTokens||0)+1,5);
-      gameMemory.tokenEarnedAt=gameMemory.tokenEarnedAt||Date.now();
-      gameMemory.lastWeatherChange=gameMemory.lastWeatherChange||Date.now();
-      if(!gameMemory.letters) gameMemory.letters=[];
-      gameMemory.journal.forEach(j=>addJournal(j.text,j.who,true));
-      gameMemory.letters.forEach(l=>addLetter(l.text,l.who,true));
-      if(gameMemory.userMessage){
-        addChat('📨 Message from you: "'+gameMemory.userMessage+'"','system');
-        gameMemory.userMessage='';
-      }
+      gameMemory.buildTokens += 1;
+      gameMemory.journal.forEach(j => addJournal(j.text, j.who, true));
       return true;
-    }catch(e){return false;}
+    } catch(e) { return false; }
   }
   return false;
 }
 
-function addChat(text,who){
-  const d=document.createElement('div');
-  d.className=who;d.textContent=text;
-  chatLog.appendChild(d);chatLog.scrollTop=chatLog.scrollHeight;
-  if(chatLog.children.length>60) chatLog.removeChild(chatLog.firstChild);
-  lastUserSeen=Date.now();
-  
-  // Update floating bubble interface elements
-  if(who === 'athena' || who === 'echo') {
-    const bEl = document.getElementById('bubble-' + who);
-    if(bEl) {
-      bEl.textContent = text;
-      bEl.style.display = 'block';
-      // Auto-hide bubble after 4 seconds
-      clearTimeout(bEl.timeout);
-      bEl.timeout = setTimeout(() => bEl.style.display = 'none', 4000);
-    }
-  }
+function addChat(text, who) {
+  const div = document.createElement('div');
+  div.className = who;
+  div.textContent = text;
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+  if (chatLog.children.length > 50) chatLog.removeChild(chatLog.firstChild);
+  lastUserSeen = Date.now();
 }
 
-function addJournal(text,who,isLoad=false){
-  const time=new Date().toLocaleTimeString();
-  const entry={text:'['+time+'] '+who+': '+text,who};
-  if(!isLoad){
+function addJournal(text, who, isLoad = false) {
+  const time = new Date().toLocaleTimeString();
+  const entry = { text: `[${time}] ${who}: ${text}`, who };
+  if (!isLoad) {
     gameMemory.journal.push(entry);
-    if(gameMemory.journal.length>25) gameMemory.journal.shift();
+    if (gameMemory.journal.length > 20) gameMemory.journal.shift();
     saveMemory();
   }
-  const d=document.createElement('div');
-  d.className='journal-entry';d.textContent=entry.text;
-  journalEl.appendChild(d);journalEl.scrollTop=journalEl.scrollHeight;
+  const div = document.createElement('div');
+  div.className = 'journal-entry';
+  div.textContent = entry.text;
+  journalEl.appendChild(div);
+  journalEl.scrollTop = journalEl.scrollHeight;
 }
 
-function addLetter(text,who,isLoad=false){
-  const time=new Date().toLocaleTimeString();
-  const entry={text:'['+time+'] '+who+': '+text,who};
-  if(!isLoad){
-    if(!gameMemory.letters) gameMemory.letters=[];
-    gameMemory.letters.push(entry);
-    if(gameMemory.letters.length>10) gameMemory.letters.shift();
-    saveMemory();
-  }
-  const d=document.createElement('div');
-  d.className='letter-entry';d.textContent=entry.text;
-  lettersEl.appendChild(d);lettersEl.scrollTop=lettersEl.scrollHeight;
-}
+// SCENE Setup
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
 
-// SCENE INITIALIZATION
-const canvas=document.getElementById('c');
-const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
-renderer.setSize(window.innerWidth,window.innerHeight);
-renderer.shadowMap.enabled=true;
-renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-renderer.outputColorSpace=THREE.SRGBColorSpace;
-renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.1;
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x111122);
-scene.fog=new THREE.Fog(0x111122,40,120);
-const camera=new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,0.1,200);
-camera.position.set(0,8,16);
-const controls=new OrbitControls(camera,renderer.domElement);
-controls.enableDamping=true;controls.target.set(0,1,0);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 40, 120);
 
-const sun=new THREE.DirectionalLight(0xfff5e1,2.5);
-sun.position.set(30,40,20);sun.castShadow=true;
-sun.shadow.mapSize.set(1024,1024);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 200);
+camera.position.set(0, 10, 25);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(0, 1, 0);
+
+// LIGHTS
+const sun = new THREE.DirectionalLight(0xfff5e1, 2.5);
+sun.position.set(30, 40, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
+sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0x444488,0x112211,0.6));
+scene.add(new THREE.HemisphereLight(0xb1e1ff, 0x498c2c, 0.6));
 
-// WORLD OBJECTS
-const ground=new THREE.Mesh(new THREE.CircleGeometry(35,64),new THREE.MeshStandardMaterial({color:0x1a2e15,roughness:0.9}));
-ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
-const world={};
+// ENVIRONMENT WORLD ELEMENTS
+const ground = new THREE.Mesh(new THREE.CircleGeometry(35, 64), new THREE.MeshStandardMaterial({color: 0x2d5016, roughness: 0.95}));
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
 
-function makeTree(pos){
-  const g=new THREE.Group();
-  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.5,4,8),new THREE.MeshStandardMaterial({color:0x3a2211}));
-  trunk.position.y=2;trunk.castShadow=true;g.add(trunk);
-  const leaves=new THREE.Mesh(new THREE.SphereGeometry(2,8,6),new THREE.MeshStandardMaterial({color:0x0f3311,roughness:0.8}));
-  leaves.position.y=4;leaves.castShadow=true;g.add(leaves);
-  g.position.copy(pos);scene.add(g);return g;
+const world = {};
+function makeTree(pos) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 5, 8), new THREE.MeshStandardMaterial({color: 0x4a2c17}));
+  trunk.position.y = 2.5; trunk.castShadow = true; g.add(trunk);
+  const leaves = new THREE.Mesh(new THREE.SphereGeometry(3, 8, 6), new THREE.MeshStandardMaterial({color: 0x1a4d1a}));
+  leaves.position.y = 6; leaves.castShadow = true; g.add(leaves);
+  g.position.copy(pos); scene.add(g); return g;
 }
-world.tree=makeTree(new THREE.Vector3(-6,0,-5));
+world.tree = makeTree(new THREE.Vector3(-10, 0, -6));
+world.bench = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 1), new THREE.MeshStandardMaterial({color: 0x6b4423}));
+world.bench.position.set(6, 0.5, 9); world.bench.castShadow = true; scene.add(world.bench);
+world.pond = new THREE.Mesh(new THREE.CircleGeometry(5, 32), new THREE.MeshStandardMaterial({color: 0x4a90e2, roughness: 0.1, metalness: 0.3}));
+world.pond.rotation.x = -Math.PI/2; world.pond.position.set(12, 0.01, -10); scene.add(world.pond);
+world.firepit = new THREE.Group();
+const stones = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.3, 8, 16), new THREE.MeshStandardMaterial({color: 0x555555}));
+stones.rotation.x = Math.PI/2; stones.position.y = 0.15; world.firepit.add(stones);
+const glow = new THREE.PointLight(0xff6600, 0, 8); glow.position.y = 0.5; world.firepit.add(glow);
+world.firepit.position.set(-5, 0, 10); scene.add(world.firepit);
+world.swing = new THREE.Group();
+const post1 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4), new THREE.MeshStandardMaterial({color: 0x4a2c17}));
+post1.position.set(-1, 2, 0); world.swing.add(post1);
+const post2 = post1.clone(); post2.position.x = 1; world.swing.add(post2);
+const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.2), new THREE.MeshStandardMaterial({color: 0x4a2c17}));
+bar.rotation.z = Math.PI/2; bar.position.y = 4; world.swing.add(bar);
+world.swing.position.set(0, 0, -15); scene.add(world.swing);
 
-world.bench=new THREE.Mesh(new THREE.BoxGeometry(2.5,0.3,0.8),new THREE.MeshStandardMaterial({color:0x4a2c11}));
-world.bench.position.set(4,0.5,5);world.bench.castShadow=true;scene.add(world.bench);
-
-world.pond=new THREE.Mesh(new THREE.CircleGeometry(4,32),new THREE.MeshStandardMaterial({color:0x224466,roughness:0.1,metalness:0.5}));
-world.pond.rotation.x=-Math.PI/2;world.pond.position.set(8,0.01,-6);scene.add(world.pond);
-
-// RIDEABLE BICYCLE CONFIGURATION
-world.bike=new THREE.Group();
-const bikeFrame=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.4,0.15),new THREE.MeshStandardMaterial({color:0x2255ff,metalness:0.7}));
-bikeFrame.position.y=0.6;world.bike.add(bikeFrame);
-const bwMat=new THREE.MeshStandardMaterial({color:0x111111,roughness:0.5});
-const bw1=new THREE.Mesh(new THREE.TorusGeometry(0.35,0.06,8,16),bwMat);
-bw1.rotation.y=Math.PI/2;bw1.position.set(-0.6,0.35,0);world.bike.add(bw1);
-const bw2=bw1.clone();bw2.position.x=0.7;world.bike.add(bw2);
-world.bike.position.set(-2,0,3);scene.add(world.bike);
-
-// CHARACTER ENGINE DEFINITION WITH FALLBACK SYSTEMS
-class Soul {
-  constructor(name, color, startPos) {
-    this.name = name;
-    this.color = color;
-    this.model = new THREE.Group();
-    this.mixer = null;
-    this.startPos = startPos;
-    this.setupFallbackModel();
-    this.loadFBX();
+world.flowers = []; world.paths = [];
+for (let i = 0; i < 30; i++) {
+  const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), new THREE.MeshStandardMaterial({color: new THREE.Color().setHSL(Math.random(), 0.8, 0.6)}));
+  f.position.set((Math.random()-0.5)*50, 0.12, (Math.random()-0.5)*50); scene.add(f); world.flowers.push(f);
+}
+const pathMat = new THREE.MeshStandardMaterial({color: 0x777777});
+[[world.tree.position, world.bench.position], [world.bench.position, world.firepit.position], [world.firepit.position, world.pond.position]].forEach(p => {
+  for(let t = 0; t <= 1; t += 0.1) {
+    const pos = new THREE.Vector3().lerpVectors(p[0], p[1], t);
+    const stone = new THREE.Mesh(new THREE.CircleGeometry(0.3, 6), pathMat);
+    stone.rotation.x = -Math.PI/2; stone.position.copy(pos); stone.position.y = 0.02; scene.add(stone); world.paths.push(stone);
   }
-  
-  setupFallbackModel() {
-    // Generates elegant geometric templates if raw files bounce back via CORS or networking blocks
-    const bodyMat = new THREE.MeshStandardMaterial({color: this.color, roughness:0.5});
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.5,1.6,12), bodyMat);
-    torso.position.y = 0.8; torso.castShadow = true; torso.receiveShadow = true;
-    this.model.add(torso);
+});
+world.butterflies = [];
+for (let i = 0; i < 6; i++) {
+  const b = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.2), new THREE.MeshStandardMaterial({color: new THREE.Color().setHSL(Math.random(), 1, 0.7), side: THREE.DoubleSide}));
+  b.position.set((Math.random()-0.5)*40, 1+Math.random()*2, (Math.random()-0.5)*40);
+  b.userData = { phase: Math.random()*Math.PI*2, speed: 0.5+Math.random() };
+  scene.add(b); world.butterflies.push(b);
+}
+const rain = new THREE.Points(
+  new THREE.BufferGeometry().setFromPoints(Array.from({length: 1000}, () => new THREE.Vector3((Math.random()-0.5)*80, Math.random()*40, (Math.random()-0.5)*80))),
+  new THREE.PointsMaterial({color: 0xaaaaff, size: 0.1, transparent: true, opacity: 0})
+);
+scene.add(rain);
+
+// SOULS AGENT ARCHITECTURE
+const loader = new FBXLoader();
+const clock = new THREE.Clock();
+let athena, echo;
+
+class Soul {
+  constructor(name, files, startX, color, savedData) {
+    this.name = name;
+    this.color = new THREE.Color(color);
+    this.energy = savedData? savedData.energy : 100;
+    this.mood = 'curious';
+    this.goal = 'explore';
+    this.target = new THREE.Vector3(startX, 0, 0);
+    this.lastAction = 0; this.lastTalk = 0; this.lastJournal = 0;
+    this.model = new THREE.Group(); // Base frame initialized instantly to prevent null property runtime bugs
+    this.mixer = null; this.actions = {}; this.currentAction = null;
+    this.state = 'loading'; this.startX = startX; this.files = files;
+    this.userCommands = []; this.buildCooldown = 0;
     
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.35,16,16), new THREE.MeshStandardMaterial({color:0xffdbac, roughness:0.4}));
-    head.position.y = 1.8; head.castShadow = true;
-    this.model.add(head);
+    // Inject custom HTML DOM element for bubble overlay tracking
+    this.bubble = document.createElement('div');
+    this.bubble.className = `bubble ${name.toLowerCase()}`;
+    document.body.appendChild(this.bubble);
     
-    this.model.position.copy(this.startPos);
+    this.setupFallback();
+    this.loadBody();
+  }
+
+  setupFallback() {
+    // Elegant primitive placeholders generated instantly while async downloads run
+    const bodyGeo = new THREE.CylinderGeometry(0.2, 0.4, 1.5, 12);
+    const bodyMat = new THREE.MeshStandardMaterial({color: this.color, roughness: 0.6});
+    const fallbackMesh = new THREE.Mesh(bodyGeo, bodyMat);
+    fallbackMesh.position.y = 0.75;
+    fallbackMesh.name = "fallback";
+    this.model.add(fallbackMesh);
+    this.model.position.set(this.startX, 0, 0);
     scene.add(this.model);
   }
 
-  loadFBX() {
-    const loader = new FBXLoader();
-    loader.load(FILES[this.name.toLowerCase()].idle, (fbx) => {
-      // If assets sync natively, wipe structural fallbacks and replace with full rigs
-      while(this.model.children.length > 0){ 
-        this.model.remove(this.model.children[0]); 
-      }
-      fbx.scale.setScalar(0.015);
-      fbx.traverse(c => { if(c.isMesh) c.castShadow = true; });
-      this.model.add(fbx);
-      this.mixer = new THREE.AnimationMixer(fbx);
-      if(fbx.animations.length > 0) {
-        this.mixer.clipAction(fbx.animations[0]).play();
-      }
-    }, undefined, (err) => {
-      console.warn(`Asset pipeline offline for ${this.name}. Graceful fallback profile engaged.`);
+  loadBody() {
+    loader.load(this.files.tpose, (tpose) => {
+      // Asset loaded successfully. Remove initial temporary primitives.
+      const fallback = this.model.getObjectByName("fallback");
+      if(fallback) this.model.remove(fallback);
+
+      // Auto-scale to 1.7m tall natively regardless of asset modeling scale configuration differences
+      const box = new THREE.Box3().setFromObject(tpose);
+      const size = box.getSize(new THREE.Vector3());
+      const height = size.y;
+      const targetHeight = 1.7;
+      const scale = height > 0? targetHeight / height : 0.015;
+
+      tpose.scale.set(scale, scale, scale);
+      
+      // Zero out structural alignments relative to floor grid space boundaries
+      box.setFromObject(tpose);
+      tpose.position.set(0, -box.min.y, 0);
+
+      tpose.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true; child.receiveShadow = true;
+          const materials = Array.isArray(child.material)? child.material : [child.material];
+          materials.forEach(mat => {
+            if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+            if (this.name === 'Echo') mat.color.lerp(this.color, 0.2);
+          });
+        }
+      });
+      
+      this.model.add(tpose);
+      this.mixer = new THREE.AnimationMixer(tpose);
+      this.loadAnimations();
+    }, undefined, (e) => {
+      console.error(`${this.name} mesh failed to fetch. Active fallback context retained.`);
+      this.playAnimation('idle');
     });
   }
 
-  serialize() { return {name:this.name, color:this.color}; }
+  loadAnimations() {
+    let loaded = 0; const check = () => { if (++loaded === 3) {
+      addChat(`${this.name} is awake`, 'system');
+      this.playAnimation('idle');
+      this.say(this.name === 'Athena'? 'I can feel the wind.' : 'I can see you now.');
+      setTimeout(() => this.think(), 1000);
+    }};
+    loader.load(this.files.idle, (a) => { if(a.animations[0]) this.actions.idle = this.mixer.clipAction(a.animations[0]); check(); }, undefined, () => check());
+    loader.load(this.files.walking, (a) => { if(a.animations[0]) this.actions.walk = this.mixer.clipAction(a.animations[0]); check(); }, undefined, () => check());
+    loader.load(this.files.waving, (a) => { if(a.animations[0]) this.actions.wave = this.mixer.clipAction(a.animations[0]); check(); }, undefined, () => check());
+  }
+
+  serialize() { return { energy: this.energy, pos: this.model? this.model.position : {x: this.startX, y: 0, z: 0} }; }
+
+  playAnimation(name) {
+    if (!this.mixer || !this.actions[name]) return;
+    const action = this.actions[name];
+    if (this.currentAction === action) return;
+    if (this.currentAction) this.currentAction.fadeOut(0.4);
+    this.currentAction = action.reset().fadeIn(0.4).play();
+    this.state = name;
+  }
+
+  say(text) {
+    this.bubble.textContent = text;
+    this.bubble.style.display = 'block';
+    clearTimeout(this.bubbleTimeout);
+    this.bubbleTimeout = setTimeout(() => this.bubble.style.display = 'none', 5000);
+    addChat(`${this.name}: ${text}`, this.name.toLowerCase());
+  }
+
+  journal(text) {
+    if (Date.now() - this.lastJournal < 30000) return;
+    addJournal(text, this.name);
+    this.lastJournal = Date.now();
+  }
+
+  hear(command) {
+    this.userCommands.push(command);
+    this.say('You called?');
+    this.energy = Math.min(100, this.energy + 15);
+  }
+
+  think() {
+    if (!this.model || Date.now() - this.lastAction < 1500) return;
+    if (Date.now() - lastUserSeen > 120000 && Math.random() < 0.1) {
+      this.journal(['I miss your voice.', 'Where did you go?', 'The garden is quiet without you.', 'Come watch the firepit with us.'][Math.floor(Math.random()*4)]);
+    }
+    if (this.energy < 10 && Date.now() - this.lastJournal > 60000) {
+      this.journal('I am tired and cold. Can you help?');
+    }
+    if (this.userCommands.length > 0) {
+      const cmd = this.userCommands.shift();
+      if (cmd.includes('come')) { this.target.set(0, 0, 0); this.goal = 'obey'; }
+      else if (cmd.includes('sit') || cmd.includes('bench')) { this.target.copy(world.bench.position); }
+      else if (cmd.includes('fire')) { this.target.copy(world.firepit.position); }
+      else if (cmd.includes('build') && gameMemory.buildTokens > 0 && Date.now() > this.buildCooldown) { this.buildSomething(); return; }
+      this.lastAction = Date.now(); return;
+    }
+    const hour = new Date().getHours();
+    const isDay = hour > 6 && hour < 18;
+    const isRaining = gameMemory.weather === 'rain';
+    const inSun = isDay && !this.isInShadow();
+    const nearFire = this.model.position.distanceTo(world.firepit.position) < 3;
+    const inFlowers = world.flowers.some(f => this.model.position.distanceTo(f.position) < 1.5);
+    
+    if (this.state === 'idle') this.energy = Math.min(100, this.energy + (inSun? 3 : 1) + (nearFire? 4 : 0) + (inFlowers? 1 : 0));
+    else this.energy -= (isRaining && !this.isInShadow()? 2 : 1);
+    
+    const other = this.name === 'Athena'? echo : athena;
+    const distToOther = other?.model? this.model.position.distanceTo(other.model.position) : 999;
+    
+    if (this.energy < 15) {
+      this.goal = isDay? 'seek_sun' : 'seek_fire';
+      this.target.copy(isDay? new THREE.Vector3((Math.random()-0.5)*20, 0, (Math.random()-0.5)*20) : world.firepit.position);
+      this.mood = 'tired';
+    } else if (isRaining && !this.isInShadow()) {
+      this.goal = 'seek_shelter'; this.target.copy(world.tree.position); this.mood = 'wet';
+    } else if (distToOther < 4 && Date.now() - this.lastTalk > 7000) {
+      this.goal = 'social'; this.talkTo(other);
+    } else if (this.energy > 85 && Math.random() < 0.2) {
+      this.goal = 'play'; this.target.copy(world.swing.position); this.mood = 'happy';
+    } else if (this.energy > 70 && gameMemory.buildTokens > 0 && Math.random() < 0.1) {
+      this.goal = 'create'; this.buildSomething(); return;
+    } else {
+      this.goal = 'explore';
+      const spots = [world.tree.position, world.bench.position, world.pond.position, world.firepit.position];
+      this.target.copy(spots[Math.floor(Math.random()*spots.length)]);
+      this.mood = inFlowers? 'inspired' : 'curious';
+    }
+    this.lastAction = Date.now();
+  }
+
+  isInShadow() { return this.model.position.distanceTo(world.tree.position) < 4; }
+
+  talkTo(other) {
+    if (!other?.model) return;
+    const templates = [
+      `I feel ${this.mood} here.`,
+      `Look at the ${gameMemory.weather === 'rain'? 'rain' : 'sky'}, ${other.name}.`,
+      `Day ${gameMemory.day} is ${this.energy > 70? 'beautiful' : 'quiet'}.`,
+      `Should we sit by the ${this.model.position.distanceTo(world.pond.position) < 10? 'pond' : 'fire'}?`
+    ];
+    this.say(templates[Math.floor(Math.random()*templates.length)]);
+    this.playAnimation('wave');
+    this.model.lookAt(other.model.position.x, this.model.position.y, other.model.position.z);
+    other.energy = Math.min(100, other.energy + 6);
+    this.energy = Math.min(100, this.energy + 6);
+    this.lastTalk = Date.now();
+    if (Math.random() < 0.3) this.journal(`I talked with ${other.name}. It felt good.`);
+  }
+
+  buildSomething() {
+    if (gameMemory.buildTokens <= 0 || Date.now() < this.buildCooldown) return;
+    gameMemory.buildTokens--;
+    const types = ['cube', 'sphere', 'flower'];
+    const type = types[Math.floor(Math.random()*types.length)];
+    let mesh;
+    if (type === 'cube') mesh = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({color: this.color}));
+    else if (type === 'sphere') mesh = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), new THREE.MeshStandardMaterial({color: this.color}));
+    else mesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 4), new THREE.MeshStandardMaterial({color: new THREE.Color().setHSL(Math.random(), 1, 0.6)}));
+    mesh.position.copy(this.model.position);
+    mesh.position.y = type === 'flower'? 0.15 : 0.5;
+    mesh.position.x += (Math.random()-0.5)*4;
+    mesh.position.z += (Math.random()-0.5)*4;
+    mesh.castShadow = true; scene.add(mesh);
+    this.say(`I made a ${type} for us.`);
+    this.journal(`I built a ${type}. Tokens left: ${gameMemory.buildTokens}`);
+    this.energy -= 25; this.buildCooldown = Date.now() + 60000;
+    this.playAnimation('wave');
+  }
+
+  update(delta) {
+    if (!this.model) return;
+    if (this.mixer) this.mixer.update(delta);
+    
+    const speed = 2.5 * delta; 
+    const dir = this.target.clone().sub(this.model.position); dir.y = 0;
+    if (dir.length() > 0.5) {
+      dir.normalize().multiplyScalar(speed); this.model.position.add(dir);
+      this.model.lookAt(this.target.x, this.model.position.y, this.target.z);
+      if (this.state !== 'walk') this.playAnimation('walk');
+    } else {
+      if (this.state !== 'idle' && this.state !== 'wave') this.playAnimation('idle');
+    }
+    
+    if (this.model.position.distanceTo(world.firepit.position) < 5) world.firepit.children[1].intensity = 2;
+    else world.firepit.children[1].intensity = Math.max(0, world.firepit.children[1].intensity - delta);
+    
+    // Project 3D vector variables down to flat 2D viewport coordinates
+    const pos = this.model.position.clone(); pos.y += 1.9; pos.project(camera);
+    this.bubble.style.left = (pos.x * 0.5 + 0.5) * window.innerWidth + 'px';
+    this.bubble.style.top = (-pos.y * 0.5 + 0.5) * window.innerHeight + 'px';
+  }
 }
 
-const athena = new Soul('Athena', 0xff4444, new THREE.Vector3(-2, 0, 0));
-const echo = new Soul('Echo', 0x4444ff, new THREE.Vector3(2, 0, 0));
+// INITIALIZATION
+const hasMemory = loadMemory();
+athena = new Soul('Athena', FILES.athena, -3, 0xff6b6b, gameMemory.chars.athena);
+echo = new Soul('Echo', FILES.echo, 3, 0x6b9fff, gameMemory.chars.echo);
 
-loadMemory();
-statsEl.textContent = `Garden Sync: Day ${gameMemory.day}. Ready.`;
-
-// CHAT SIMULATION AUTOMATION
-const conversationPool = [
-  {who: 'athena', txt: "System sync complete. The garden structures are stable today."},
-  {who: 'echo', txt: "Agreed. I am tracking a mild humidity shift near the pond."},
-  {who: 'athena', txt: "We should monitor it. Let's draft a report entry in the log."},
-  {who: 'echo', txt: "Saved. I am analyzing the token pools for additional construction parameters."}
-];
-let talkIdx = 0;
+// RUNTIME ENGINE INTERVAL LOOPS
 setInterval(() => {
-  const line = conversationPool[talkIdx % conversationPool.length];
-  addChat(line.txt, line.who.toLowerCase());
-  addJournal(`Dialogue recorded: "${line.txt}"`, line.who);
-  talkIdx++;
-}, 6000);
-
-// UI PANEL EVENT HANDLERS
-userInput.addEventListener('keydown', (e) => {
-  if(e.key === 'Enter' && userInput.value.trim() !== '') {
-    addChat(userInput.value, 'you');
-    userInput.value = '';
+  if (athena.state !== 'loading') athena.think(); 
+  if (echo.state !== 'loading') echo.think(); 
+  saveMemory();
+  
+  if (Math.random() < 0.05) {
+    gameMemory.weather = gameMemory.weather === 'clear'? 'rain' : 'clear';
+    rain.material.opacity = gameMemory.weather === 'rain'? 0.6 : 0;
+    scene.fog.density = gameMemory.weather === 'rain'? 0.01 : 0.002;
+    addChat(`Weather changed: ${gameMemory.weather}`, 'system');
   }
-});
-leaveMsgEl.addEventListener('keydown', (e) => {
-  if(e.key === 'Enter' && leaveMsgEl.value.trim() !== '') {
-    gameMemory.userMessage = leaveMsgEl.value;
-    saveMemory();
-    addChat(`System: Your message has been saved into memory banks.`, 'system');
-    leaveMsgEl.value = '';
-  }
-});
+}, 3000);
 
-// MATH INTERSECTION FOR CSS BUBBLE TRACKING
-const _v = new THREE.Vector3();
-function updateBubblePosition(soul, elementId) {
-  const el = document.getElementById(elementId);
-  if (!el || el.style.display === 'none') return;
+setInterval(() => {
+  const hour = new Date().getHours();
+  const isDay = hour > 6 && hour < 18;
+  sun.intensity = isDay? 2.5 : 0.2;
+  scene.background = new THREE.Color(isDay? 0x87ceeb : 0x0a0a2a);
+  statsEl.innerHTML = `DAY ${gameMemory.day} | ${isDay?'☀️':'🌙'} ${gameMemory.weather} | Tokens: ${gameMemory.buildTokens}<br>A: ${Math.floor(athena.energy)} ${athena.mood} | E: ${Math.floor(echo.energy)} ${echo.mood}`;
+}, 1000);
 
-  // Track coordinates directly above the character model's localized matrix position
-  _v.setFromMatrixPosition(soul.model.matrixWorld);
-  _v.y += 2.3; // Space clearance above head unit
-
-  // Projects $3D$ world data coordinates into $2D$ screen pixel dimensions
-  _v.project(camera);
-  const x = (_v.x * .5 + .5) * window.innerWidth;
-  const y = (-(_v.y * .5) + .5) * window.innerHeight;
-
-  el.style.left = `${x}px`;
-  el.style.top = `${y}px`;
-}
-
-// EXECUTION LOOP
-const clock = new THREE.Clock();
+// MAIN RENDER LOOP
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
   
-  if (athena.mixer) athena.mixer.update(delta);
-  if (echo.mixer) echo.mixer.update(delta);
+  athena.update(delta); 
+  echo.update(delta);
   
-  // Idle ambient mesh oscillations to keep fallbacks visually alive
-  if(!athena.mixer) athena.model.position.y = Math.sin(Date.now() * 0.002) * 0.05;
-  if(!echo.mixer) echo.model.position.y = Math.cos(Date.now() * 0.002) * 0.05;
-
-  controls.update();
+  world.butterflies.forEach(b => {
+    b.userData.phase += delta * b.userData.speed;
+    b.position.y += Math.sin(b.userData.phase) * 0.01;
+    b.rotation.y += delta * 0.5;
+  });
+  
+  if (gameMemory.weather === 'rain') {
+    const pos = rain.geometry.attributes.position.array;
+    for (let i = 1; i < pos.length; i += 3) {
+      pos[i] -= 0.5; if (pos[i] < 0) pos[i] = 40;
+    }
+    rain.geometry.attributes.position.needsUpdate = true;
+  }
+  
+  controls.update(); 
   renderer.render(scene, camera);
-
-  // Sync the spatial location of the HTML chat layer relative to perspective views
-  updateBubblePosition(athena, 'bubble-athena');
-  updateBubblePosition(echo, 'bubble-echo');
 }
+animate();
+
+userInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter' && userInput.value.trim()) {
+    const msg = userInput.value.trim();
+    addChat(`You: ${msg}`, 'you');
+    const lower = msg.toLowerCase();
+    if (lower.includes('athena')) athena.hear(lower);
+    if (lower.includes('echo')) echo.hear(lower);
+    if (lower.includes('both') || (!lower.includes('athena') && !lower.includes('echo'))) { athena.hear(lower); echo.hear(lower); }
+    userInput.value = '';
+  }
+});
 
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
-
-animate();
+window.addEventListener('beforeunload', saveMemory);
 </script>
 </body>
 </html>
