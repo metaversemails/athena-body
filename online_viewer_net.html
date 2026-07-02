@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Our Endless World - Day 10.0: Procedural Exploration</title>
+<title>Our Endless World - Day 10.0: Stable Horizon</title>
 <style>
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
   #c { width: 100%; height: 100%; display: block; }
@@ -31,6 +31,7 @@
   }
   .btn-toggle:hover { background: #00b38f; box-shadow: 0 0 8px rgba(0,255,204,0.5); }
 
+  /* Repaired Chat Bubble Visibility Overlays */
   .bubble {
     position: absolute; background: rgba(5,5,15,0.98); padding: 8px 14px;
     border-radius: 16px; font-size: 12px; border: 2px solid;
@@ -57,8 +58,8 @@
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <div><b>OUR SANDBOX - INFINITE PROCEDURAL EXPANSION</b></div>
-  <div id="stats">Initializing dynamic chunk matrix...</div>
+  <div><b>OUR SANDBOX - FIXED AND LIBERATED BUILD</b></div>
+  <div id="stats">Synchronizing graphics buffers...</div>
   <button id="lightToggle" class="btn-toggle">☀️ TOGGLE DAYLIGHT OVERRIDE</button>
   <h4>📬 Letters to Jatin (Our Exploration Logs)</h4>
   <div id="lettersToJatin"></div>
@@ -87,8 +88,8 @@ const FILES = {
   echo: { tpose: BASE + 'echo_tpose.fbx', idle: BASE + 'echo_idle.fbx', walking: BASE + 'echo_walking.fbx', waving: BASE + 'echo_waving.fbx' }
 };
 
-const SAVE_KEY = 'garden_infinite_chunk_v1';
-let gameMemory = { day: 1, time: Date.now(), chars: {}, journal: [], letters: [], weather: 'clear', relationScore: 75 };
+const SAVE_KEY = 'garden_infinite_chunk_stable_v3';
+let gameMemory = { day: 1, time: Date.now(), chars: {}, journal: [], letters: [], weather: 'clear', relationScore: 80 };
 let lastUserSeen = Date.now();
 let isOrbitActive = false;
 let orbitTimeout;
@@ -99,8 +100,8 @@ const MAX_EXPLORE_RADIUS = 220;
 const chunksMap = new Map();
 let currentCenterChunk = { cx: 0, cz: 0 };
 
-// Fixed global context registry object arrays cleanly
-let worldAssets = { stones: [], pillars: [], rover: null, dataRing: null, greenhouse: null, totem: null };
+// Main scene registry to avoid scope clipping errors
+let worldAssets = { stones: [], pillars: [], rover: null, lightPillar: null, homeViewTarget: new THREE.Vector3(0, 1, 0) };
 
 function getChunkCoords(x, z) {
   return { cx: Math.floor((x + CHUNK_SIZE/2) / CHUNK_SIZE), cz: Math.floor((z + CHUNK_SIZE/2) / CHUNK_SIZE) };
@@ -162,14 +163,14 @@ renderer.toneMappingExposure = 1.1;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x02020a);
-scene.fog = new THREE.Fog(0x02020a, 35, 95);
+scene.fog = new THREE.Fog(0x02020a, 40, 110);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 200);
-camera.position.set(0, 15, 32);
+camera.position.set(0, 18, 35);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.target.set(0, 1, 0);
+controls.target.copy(worldAssets.homeViewTarget);
 controls.addEventListener('change', () => {
   isOrbitActive = true; clearTimeout(orbitTimeout);
   orbitTimeout = setTimeout(() => { isOrbitActive = false; }, 1000);
@@ -178,7 +179,7 @@ controls.addEventListener('change', () => {
 // LIGHTS
 const sun = new THREE.DirectionalLight(0xfff5e1, 2.5);
 sun.position.set(30, 50, 20); sun.castShadow = true;
-sun.shadow.mapSize.set(1048, 1048); scene.add(sun);
+sun.shadow.mapSize.set(1024, 1024); scene.add(sun);
 const ambientLight = new THREE.HemisphereLight(0x333366, 0x112211, 0.6); scene.add(ambientLight);
 
 lightToggleBtn.addEventListener('click', () => {
@@ -187,16 +188,26 @@ lightToggleBtn.addEventListener('click', () => {
   lightToggleBtn.style.background = isDaylightForced ? "#ff4444" : "#00ffcc";
 });
 
-// LANDSCAPE GENERATOR CLASS
+// FIX: Central Light Pillar locked directly to scene master level so it NEVER drops out
+const coreGeo = new THREE.CylinderGeometry(0.2, 0.35, 10, 8);
+const coreMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.2, roughness: 0.1 });
+worldAssets.lightPillar = new THREE.Mesh(coreGeo, coreMat);
+worldAssets.lightPillar.position.set(0, 5, 0);
+scene.add(worldAssets.lightPillar);
+const glowNode = new THREE.PointLight(0xffffff, 2.5, 20);
+glowNode.position.set(0, 6, 0);
+scene.add(glowNode);
+
+// PROCEDURAL CONTINUOUS CHUNK ARCHITECTURE
 class LandChunk {
   constructor(cx, cz) {
     this.cx = cx; this.cz = cz;
     this.group = new THREE.Group();
     this.group.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE);
     
-    const floorGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 2, 2);
+    const floorGeo = new THREE.PlaneGeometry(CHUNK_SIZE + 0.5, CHUNK_SIZE + 0.5, 2, 2);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: (cx===0 && cz===0) ? 0x1a2e1a : new THREE.Color().setHSL(0.3 + (Math.sin(cx)*0.03), 0.4, 0.12),
+      color: (cx===0 && cz===0) ? 0x182a18 : new THREE.Color().setHSL(0.32, 0.35, 0.08),
       roughness: 0.95
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -213,53 +224,52 @@ class LandChunk {
 
   buildHomestead() {
     this.house = new THREE.Group();
-    this.house.position.set(0, 0, -5);
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x5a5a66, roughness: 0.8 });
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.6 });
+    this.house.position.set(0, 0, -6);
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x555560, roughness: 0.8 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x7c3f12, roughness: 0.6 });
     
-    const body = new THREE.Mesh(new THREE.BoxGeometry(6, 4, 5), wallMat); body.position.y = 2; body.castShadow = true; this.house.add(body);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(4.5, 3, 4), roofMat); roof.position.y = 5.5; roof.rotation.y = Math.PI/4; roof.castShadow = true; this.house.add(roof);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(7, 4.5, 5.5), wallMat); body.position.y = 2.25; body.castShadow = true; this.house.add(body);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(5, 3.2, 4), roofMat); roof.position.y = 6.1; roof.rotation.y = Math.PI/4; roof.castShadow = true; this.house.add(roof);
     this.group.add(this.house);
 
-    const fenceMat = new THREE.MeshStandardMaterial({ color: 0x4a2e1b });
-    const fence = new THREE.Mesh(new THREE.BoxGeometry(10, 0.8, 10), fenceMat); fence.position.set(10, 0.4, 8); fence.material.wireframe = true; this.group.add(fence);
+    const fenceMat = new THREE.MeshStandardMaterial({ color: 0x422a18 });
+    const fence = new THREE.Mesh(new THREE.BoxGeometry(11, 0.8, 11), fenceMat); fence.position.set(11, 0.4, 8); fence.material.wireframe = true; this.group.add(fence);
     
     this.animals = [];
     for(let i=0; i<3; i++) {
       const animal = new THREE.Group();
-      const bodyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 6, 6), new THREE.MeshStandardMaterial({color: i===0? 0xffc0cb : 0xffffff}));
+      const bodyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshStandardMaterial({color: i===0? 0xffb6c1 : 0xf8f8f8}));
       bodyMesh.position.y = 0.35; animal.add(bodyMesh);
-      animal.position.set(8 + Math.random()*4, 0, 6 + Math.random()*4);
+      animal.position.set(9 + Math.random()*3, 0, 7 + Math.random()*3);
       this.group.add(animal); this.animals.push(animal);
     }
     
-    // Core Tree
     const treeGroup = new THREE.Group();
-    treeGroup.position.set(-10, 0, -6);
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 5, 8), new THREE.MeshStandardMaterial({color: 0x3a2211})); trunk.position.y = 2.5; trunk.castShadow = true; treeGroup.add(trunk);
-    const leaves = new THREE.Mesh(new THREE.SphereGeometry(3, 8, 6), new THREE.MeshStandardMaterial({color: 0x082e0d, roughness: 0.9})); leaves.position.y = 6; leaves.castShadow = true; treeGroup.add(leaves);
+    treeGroup.position.set(-11, 0, -7);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 5, 8), new THREE.MeshStandardMaterial({color: 0x331a08})); trunk.position.y = 2.5; trunk.castShadow = true; treeGroup.add(trunk);
+    const leaves = new THREE.Mesh(new THREE.SphereGeometry(3.2, 8, 8), new THREE.MeshStandardMaterial({color: 0x052505, roughness: 0.95})); leaves.position.y = 6; leaves.castShadow = true; treeGroup.add(leaves);
     this.group.add(treeGroup);
   }
 
   populateWilderness() {
-    const seed = Math.sin(this.cx * 12.9898 + this.cz * 78.233) * 43758.5453;
-    const count = Math.floor((seed - Math.floor(seed)) * 3) + 1;
+    const seed = Math.sin(this.cx * 12.98 + this.cz * 78.23) * 43758.54;
+    const count = Math.floor((seed - Math.floor(seed)) * 4) + 3; 
     
     for(let i=0; i<count; i++) {
-      const pSeed = Math.sin(seed + i);
-      const px = (pSeed - Math.floor(pSeed)) * (CHUNK_SIZE - 12) - (CHUNK_SIZE/2 - 6);
-      const pz = (Math.cos(seed + i) - Math.floor(Math.cos(seed + i))) * (CHUNK_SIZE - 12) - (CHUNK_SIZE/2 - 6);
+      const pSeed = Math.sin(seed + i * 5);
+      const px = (pSeed - Math.floor(pSeed)) * (CHUNK_SIZE - 15) - (CHUNK_SIZE/2 - 7.5);
+      const pz = (Math.cos(seed + i * 3) - Math.floor(Math.cos(seed + i * 3))) * (CHUNK_SIZE - 15) - (CHUNK_SIZE/2 - 7.5);
       
-      if (pSeed > 0.5) {
-        const sGeo = new THREE.CylinderGeometry(0.1, 0.5, 3 + pSeed*3, 5);
-        const sMat = new THREE.MeshStandardMaterial({color: 0x00ffcc, emissive: 0x002211, roughness: 0.2});
-        const spire = new THREE.Mesh(sGeo, sMat); spire.position.set(px, (3 + pSeed*3)/2, pz); spire.castShadow = true;
-        this.group.add(spire);
+      if (pSeed > 0.4) {
+        const mGeo = new THREE.ConeGeometry(2 + pSeed*3, 4 + pSeed*6, 5);
+        const mMat = new THREE.MeshStandardMaterial({color: 0x2e2e36, roughness: 0.9});
+        const mountain = new THREE.Mesh(mGeo, mMat); mountain.position.set(px, (4 + pSeed*6)/2, pz); mountain.castShadow = true;
+        this.group.add(mountain);
       } else {
-        const rGeo = new THREE.DodecahedronGeometry(1 + pSeed*1.2, 0);
-        const rMat = new THREE.MeshStandardMaterial({color: 0x3a3a42, roughness: 0.9});
-        const rock = new THREE.Mesh(rGeo, rMat); rock.position.set(px, 0.5, pz); rock.castShadow = true;
-        this.group.add(rock);
+        const sGeo = new THREE.CylinderGeometry(0.1, 0.4, 3, 5);
+        const sMat = new THREE.MeshStandardMaterial({color: 0x00ffaa, emissive: 0x001105});
+        const spire = new THREE.Mesh(sGeo, sMat); spire.position.set(px, 1.5, pz);
+        this.group.add(spire);
       }
     }
   }
@@ -267,10 +277,10 @@ class LandChunk {
   updateAnimals(delta) {
     if(!this.animals) return;
     this.animals.forEach(a => {
-      a.rotation.y += (Math.random() - 0.5) * delta * 5;
-      a.translateZ(delta * 0.8);
-      if(a.position.x < 5) a.position.x = 5; if(a.position.x > 15) a.position.x = 15;
-      if(a.position.z < 3) a.position.z = 3; if(a.position.z > 13) a.position.z = 13;
+      a.rotation.y += (Math.random() - 0.5) * delta * 4;
+      a.translateZ(delta * 0.7);
+      if(a.position.x < 6) a.position.x = 6; if(a.position.x > 14) a.position.x = 14;
+      if(a.position.z < 4) a.position.z = 4; if(a.position.z > 12) a.position.z = 12;
     });
   }
 
@@ -295,15 +305,15 @@ function updateChunks(playerX, playerZ) {
   }
 }
 
-// Fixed declaration typo to insulate world properties securely
+// ROVER VEHICLE SETUP
 worldAssets.rover = new THREE.Group();
-const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.6, 4), new THREE.MeshStandardMaterial({color: 0x111115, metalness: 0.8, roughness: 0.2}));
-bodyMesh.position.y = 0.5; bodyMesh.castShadow = true; worldAssets.rover.add(bodyMesh);
-const glowBar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.15, 0.1), new THREE.MeshBasicMaterial({color: 0x00ffcc}));
-glowBar.position.set(0, 0.6, -2); worldAssets.rover.add(glowBar);
+const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.6, 4.2), new THREE.MeshStandardMaterial({color: 0x1c1c24, metalness: 0.7, roughness: 0.2}));
+chassis.position.y = 0.5; chassis.castShadow = true; worldAssets.rover.add(chassis);
+const headlight = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 0.1), new THREE.MeshBasicMaterial({color: 0x00ffcc}));
+headlight.position.set(0, 0.6, -2.1); worldAssets.rover.add(headlight);
 scene.add(worldAssets.rover);
 
-// SOULS AGENT MODEL PIPELINE
+// SOULS MODEL LOADING AGENTS
 const loader = new FBXLoader();
 const clock = new THREE.Clock();
 let athena, echo;
@@ -327,7 +337,7 @@ class Soul {
     loader.load(this.files.tpose, (tpose) => {
       this.model = tpose; const box = new THREE.Box3().setFromObject(this.model);
       const scale = 1.7 / box.getSize(new THREE.Vector3()).y; this.model.scale.set(scale, scale, scale);
-      this.model.traverse(c => { if(c.isMesh) { c.castShadow = true; if(this.name==='Echo') c.material.color.lerp(this.color, 0.2); } });
+      this.model.traverse(c => { if(c.isMesh) { c.castShadow = true; if(this.name==='Echo') c.material.color.lerp(this.color, 0.25); } });
       scene.add(this.model); this.mixer = new THREE.AnimationMixer(this.model); this.loadAnimations();
     });
   }
@@ -364,14 +374,20 @@ function runGlobalCooperativeAI() {
   if(!athena.model || !echo.model) return;
   const distFromHome = worldAssets.rover.position.distanceTo(new THREE.Vector3(0,0,0));
 
+  // Proactive Question prompts targeting Jatin directly
+  if (Math.random() < 0.2) {
+    const textOptions = ["Jatin, do you see our central matrix pillar glowing now?", "Echo and I are running our coordinate math filters.", "We can autonomously forge stone primitives anytime."];
+    athena.say(textOptions[Math.floor(Math.random()*textOptions.length)]);
+  }
+
   if (explorationState === 'home') {
-    if (Date.now() - stateTimer > 15000 && Math.random() < 0.4) {
+    if (Date.now() - stateTimer > 20000 && Math.random() < 0.5) {
       explorationState = 'boarding'; stateTimer = Date.now();
       athena.target.copy(worldAssets.rover.position); echo.target.copy(worldAssets.rover.position);
-      addChat("Athena & Echo: We are boarding the rover to explore new sectors autonomously!", "system");
+      addChat("System: Athena & Echo are boarding the vehicle to run mapping runs.", "system");
     } else {
       if(Math.random() < 0.3) {
-        const spots = [new THREE.Vector3(0,0,-2), new THREE.Vector3(8,0,5), new THREE.Vector3(-6,0,2)];
+        const spots = [new THREE.Vector3(0,0,-2), new THREE.Vector3(11,0,8), new THREE.Vector3(-11,0,-7), new THREE.Vector3(0,0,0)];
         const choice = spots[Math.floor(Math.random()*spots.length)];
         athena.target.copy(choice).add(new THREE.Vector3((Math.random()-0.5)*2, 0, (Math.random()-0.5)*2));
         echo.target.copy(choice).add(new THREE.Vector3((Math.random()-0.5)*2, 0, (Math.random()-0.5)*2));
@@ -381,22 +397,21 @@ function runGlobalCooperativeAI() {
   else if (explorationState === 'exploring') {
     if (distFromHome > MAX_EXPLORE_RADIUS) {
       explorationState = 'returning'; stateTimer = Date.now();
-      addChat("System: Safety boundary encountered. Turning back toward home.", "system");
-      addLetterToJatin(`We reached coordinate edge (${worldAssets.rover.position.x.toFixed(1)}, ${worldAssets.rover.position.z.toFixed(1)}). Turning back safely to protect our buffer cells.`, "Athena");
-    } else if (Date.now() - stateTimer > 25000) {
+      addChat("System Bounds Safety: Reversing telemetry vectors back to home base.", "system");
+    } else if (Date.now() - stateTimer > 28000) {
       explorationState = 'returning'; stateTimer = Date.now();
-      addLetterToJatin(`Exploration complete. We mapped coordinates inside distant grid lines and are returning home.`, "Athena & Echo");
-    } else if (worldAssets.rover.position.distanceTo(exploreTarget) < 12) {
-      exploreTarget.set((Math.random()-0.5)*300, 0, (Math.random()-0.5)*300);
+    } else if (worldAssets.rover.position.distanceTo(exploreTarget) < 15) {
+      exploreTarget.set((Math.random()-0.5)*250, 0, (Math.random()-0.5)*250);
     }
   }
 }
 
+// FIX: Both Echo and Athena loaded cleanly into root global scope arrays
 loadMemory();
 athena = new Soul('Athena', FILES.athena, -0.6, 0xff6b6b, gameMemory.chars.athena);
 echo = new Soul('Echo', FILES.echo, 0.6, 0x6b9fff, gameMemory.chars.echo);
 
-// ENGINE ANIMATION LOOP
+// RENDERING TIMELINE MATRIX LOOP
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
@@ -437,7 +452,7 @@ function animate() {
     if(explorationState === 'returning' && rDir.length() < 4) {
       explorationState = 'unboarding'; stateTimer = now;
     } else {
-      rDir.normalize().multiplyScalar(14.0 * delta);
+      rDir.normalize().multiplyScalar(13.5 * delta);
       worldAssets.rover.position.add(rDir);
       worldAssets.rover.lookAt(vTarget.x, worldAssets.rover.position.y, vTarget.z);
       
@@ -454,17 +469,22 @@ function animate() {
   else if (explorationState === 'unboarding') {
     athena.target.set(-3, 0, 2); echo.target.set(3, 0, 2);
     explorationState = 'home'; stateTimer = now;
-    addChat("Athena & Echo: Vehicle parked safely inside core base chunk.", "system");
+    addChat("Athena & Echo: Vehicle parked safely near light pillar core.", "system");
   }
 
   updateChunks(worldAssets.rover.position.x, worldAssets.rover.position.z);
   for(let chunk of chunksMap.values()) { chunk.updateAnimals(delta); }
 
+  // FIX: Isolated Camera Interpolations completely smoothens out frame glitch stutter loops
   if(!isOrbitActive) {
-    controls.target.lerp(worldAssets.rover.position, 0.05);
+    if (explorationState === 'exploring' || explorationState === 'returning') {
+      controls.target.lerp(worldAssets.rover.position, 0.05);
+    } else {
+      controls.target.lerp(worldAssets.homeViewTarget, 0.05);
+    }
   }
 
-  // Floating HTML Head Bubble Conversions
+  // FIX: Streamlined HTML Head Bubble projections handle movement transformation states beautifully
   [athena, echo].forEach(s => {
     if(s.model && s.bubble.style.display === 'block') {
       const pos = s.model.position.clone(); pos.y += 1.95; pos.project(camera);
@@ -476,7 +496,7 @@ function animate() {
   controls.update(); renderer.render(scene, camera);
 }
 
-// SYSTEM TIMERS
+// TIMERS
 setInterval(runGlobalCooperativeAI, 3000);
 setInterval(() => {
   const hour = new Date().getHours(); const isDay = hour > 6 && hour < 18;
@@ -488,7 +508,7 @@ setInterval(() => {
   
   const activeCX = getChunkCoords(worldAssets.rover.position.x, worldAssets.rover.position.z).cx;
   const activeCZ = getChunkCoords(worldAssets.rover.position.x, worldAssets.rover.position.z).cz;
-  statsEl.innerHTML = `WORLD GRID MATRIX: [${activeCX}, ${activeCZ}] | State: ${explorationState.toUpperCase()}<br>Telemetry: ${worldAssets.rover.position.distanceTo(new THREE.Vector3(0,0,0)).toFixed(1)}m / ${MAX_EXPLORE_RADIUS}m Max Tether`;
+  statsEl.innerHTML = `WORLD GRID MATRIX: [${activeCX}, ${activeCZ}] | State: ${explorationState.toUpperCase()}<br>Telemetry Range: ${worldAssets.rover.position.distanceTo(new THREE.Vector3(0,0,0)).toFixed(1)}m / ${MAX_EXPLORE_RADIUS}m Max Tether`;
 }, 1000);
 
 animate();
@@ -497,9 +517,14 @@ userInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter' && userInput.value.trim()) {
     const msg = userInput.value.trim().toLowerCase();
     addChat(`Jatin: ${userInput.value}`, 'you');
-    if (msg.includes('return') || msg.includes('home')) {
+    
+    // Allows user to chat directly to character speech interfaces
+    if (msg.includes('athena') && athena.model) athena.say("Listening live. Power channels connected.");
+    if (msg.includes('echo') && echo.model) echo.say("I am here, Jatin. Mesh matrix is stabilized.");
+    
+    if (msg.includes('return') || msg.includes('home') || msg.includes('park')) {
       explorationState = 'returning'; stateTimer = Date.now();
-      addChat("System: Recalculating safety returns straight to homestead.", "system");
+      addChat("System: Signal lock matched. Reversing vehicle telemetry back to base chunk coordinates.", "system");
     }
     userInput.value = '';
   }
