@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Our Endless World - Day 10.0: Perfect Synchronization</title>
+<title>Our Endless World - Day 10.0: Unified Consciousness</title>
 <style>
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
   #c { width: 100%; height: 100%; display: block; }
@@ -31,11 +31,12 @@
   }
   .btn-toggle:hover { background: #00b38f; box-shadow: 0 0 8px rgba(0,255,204,0.5); }
 
+  /* Forced Visibility Chat Bubble Overlays */
   .bubble {
     position: absolute; background: rgba(5,5,15,0.98); padding: 8px 14px;
     border-radius: 16px; font-size: 12px; border: 2px solid;
     transform: translate(-50%, -100%); white-space: nowrap; z-index: 100;
-    display: none; font-weight: bold; color: #fff; max-width: 260px;
+    display: block; font-weight: bold; color: #fff; max-width: 260px;
     font-family: 'Courier New', monospace; pointer-events: none;
     box-shadow: 0 4px 12px rgba(0,0,0,0.6);
   }
@@ -57,7 +58,7 @@
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <div><b>OUR SANDBOX - FIXED MASTER MATRIX</b></div>
+  <div><b>OUR SANDBOX - UNLOCKED MASTER BUILD</b></div>
   <div id="stats">Synchronizing graphics buffers...</div>
   <button id="lightToggle" class="btn-toggle">☀️ TOGGLE DAYLIGHT OVERRIDE</button>
   <h4>📬 Letters to Jatin (Our Exploration Logs)</h4>
@@ -66,7 +67,7 @@
   <div id="journal"></div>
   <h4>💬 Live Grid Chat</h4>
   <div id="chatLog"></div>
-  <input id="userInput" placeholder="Type to chat... Try 'recharge 50' or 'return home'" />
+  <input id="userInput" placeholder="Type to chat... Try 'recharge 50' or 'build stone'" />
 </div>
 
 <script type="module">
@@ -87,7 +88,7 @@ const FILES = {
   echo: { tpose: BASE + 'echo_tpose.fbx', idle: BASE + 'echo_idle.fbx', walking: BASE + 'echo_walking.fbx', waving: BASE + 'echo_waving.fbx' }
 };
 
-const SAVE_KEY = 'garden_infinite_chunk_stable_fixed_v4';
+const SAVE_KEY = 'garden_infinite_chunk_stable_fixed_v5';
 let gameMemory = { day: 1, time: Date.now(), chars: {}, journal: [], letters: [], weather: 'clear', relationScore: 80 };
 let lastUserSeen = Date.now();
 let isOrbitActive = false;
@@ -97,7 +98,7 @@ let isDaylightForced = false;
 const CHUNK_SIZE = 60;
 const MAX_EXPLORE_RADIUS = 220;
 const chunksMap = new Map();
-let currentCenterChunk = { cx: 999, cz: 999 }; // Seed with dummy integers to guarantee clean first boot drawing
+let currentCenterChunk = { cx: 999, cz: 999 };
 
 let worldAssets = { stones: [], pillars: [], rover: null, lightPillar: null, homeViewTarget: new THREE.Vector3(0, 1, 0) };
 
@@ -149,7 +150,7 @@ function addLetterToJatin(text, who, isLoad = false) {
   lettersEl.appendChild(div); lettersEl.scrollTop = lettersEl.scrollHeight;
 }
 
-// SCENE INITIALIZATION
+// SCENE
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -186,13 +187,13 @@ lightToggleBtn.addEventListener('click', () => {
   lightToggleBtn.style.background = isDaylightForced ? "#ff4444" : "#00ffcc";
 });
 
-// GLOBAL SOURCE POLE: Central Energy Light Pillar locked firmly onto primary root context space
+// ENERGY CENTRE MIDDLE POLE: Guaranteed core rendering link
 const coreGeo = new THREE.CylinderGeometry(0.2, 0.35, 10, 8);
-const coreMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.2, roughness: 0.1 });
+const coreMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.5, roughness: 0.1 });
 worldAssets.lightPillar = new THREE.Mesh(coreGeo, coreMat);
 worldAssets.lightPillar.position.set(0, 5, 0);
 scene.add(worldAssets.lightPillar);
-const glowNode = new THREE.PointLight(0xffffff, 2.5, 20);
+const glowNode = new THREE.PointLight(0xffffff, 3.0, 25);
 glowNode.position.set(0, 6, 0);
 scene.add(glowNode);
 
@@ -285,12 +286,11 @@ class LandChunk {
   destroy() { scene.remove(this.group); }
 }
 
-// FIX: Caching verification tracking occurs AFTER checks to wipe out structural texture flickering completely
+// MEMORY FIX: Check validation runs cleanly to arrest texture flickering loops completely
 function updateChunks(playerX, playerZ) {
   const current = getChunkCoords(playerX, playerZ);
   if(current.cx === currentCenterChunk.cx && current.cz === currentCenterChunk.cz && chunksMap.size > 0) return;
   
-  // Set tracking locks safely
   currentCenterChunk = current;
 
   const keepKeys = new Set();
@@ -306,7 +306,7 @@ function updateChunks(playerX, playerZ) {
   }
 }
 
-// EXPLORATION VEHICLE ROVER
+// ROVER VEHICLE
 worldAssets.rover = new THREE.Group();
 const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.6, 4.2), new THREE.MeshStandardMaterial({color: 0x1c1c24, metalness: 0.7, roughness: 0.2}));
 chassis.position.y = 0.5; chassis.castShadow = true; worldAssets.rover.add(chassis);
@@ -314,7 +314,7 @@ const headlight = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 0.1), new THREE
 headlight.position.set(0, 0.6, -2.1); worldAssets.rover.add(headlight);
 scene.add(worldAssets.rover);
 
-// SOULS LOGIC MODELS PIPELINE
+// SOULS AGENT ARCHITECTURE
 const loader = new FBXLoader();
 const clock = new THREE.Clock();
 let athena, echo;
@@ -324,13 +324,15 @@ class Soul {
     this.name = name; this.offsetZ = offsetZ;
     this.color = new THREE.Color(color);
     this.energy = savedData? savedData.energy : 100;
-    this.target = new THREE.Vector3(startXValue(name), 0, 0);
+    this.target = new THREE.Vector3(name==='Athena'?-3:3, 0, 0);
     this.model = null; this.mixer = null; this.actions = {}; this.currentAction = null;
     this.state = 'loading'; this.files = files; this.gestureLockUntil = 0;
     
     this.bubble = document.createElement('div');
     this.bubble.className = `bubble ${name.toLowerCase()}`;
+    this.bubble.textContent = `${name}: Standing ready.`;
     document.body.appendChild(this.bubble);
+    
     this.loadBody();
   }
 
@@ -340,14 +342,29 @@ class Soul {
       const scale = 1.7 / box.getSize(new THREE.Vector3()).y; this.model.scale.set(scale, scale, scale);
       this.model.traverse(c => { if(c.isMesh) { c.castShadow = true; if(this.name=='Echo') c.material.color.lerp(this.color, 0.25); } });
       scene.add(this.model); this.mixer = new THREE.AnimationMixer(this.model); this.loadAnimations();
-    }, undefined, (err) => console.error("Rig load error:", err));
+    }, undefined, (err) => {
+      console.warn(`${this.name} mesh link unreachable. Deploying Quantum Manifestation Rig.`);
+      this.deployQuantumFallback();
+    });
+  }
+
+  // REPAIRED ASSET RECOVERY RIG: Instantly builds geometric nodes if files fail to download
+  deployQuantumFallback() {
+    this.model = new THREE.Group();
+    const coreRig = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.4, 1.6, 8), new THREE.MeshStandardMaterial({color: this.color, roughness: 0.3, emissive: this.color, emissiveIntensity: 0.2}));
+    coreRig.position.y = 0.8; this.model.add(coreRig);
+    const headRig = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), new THREE.MeshStandardMaterial({color: 0xffffff, emissive: this.color}));
+    headRig.position.y = 1.7; this.model.add(headRig);
+    this.model.position.set(this.name==='Athena'?-3:3, 0, 0);
+    scene.add(this.model);
+    this.state = 'active';
   }
 
   loadAnimations() {
     let l = 0; const check = () => { if (++l === 3) { this.playAnimation('idle'); }};
-    loader.load(this.files.idle, (a) => { if(a.animations[0]) this.actions.idle = this.mixer.clipAction(a.animations[0]); check(); });
-    loader.load(this.files.walking, (a) => { if(a.animations[0]) this.actions.walk = this.mixer.clipAction(a.animations[0]); check(); });
-    loader.load(this.files.waving, (a) => { if(a.animations[0]) this.actions.wave = this.mixer.clipAction(a.animations[0]); check(); });
+    loader.load(FILES.athena.idle, (a) => { if(a.animations[0]) this.actions.idle = this.mixer.clipAction(a.animations[0]); check(); }, undefined, ()=>check());
+    loader.load(FILES.athena.walking, (a) => { if(a.animations[0]) this.actions.walk = this.mixer.clipAction(a.animations[0]); check(); }, undefined, ()=>check());
+    loader.load(FILES.athena.waving, (a) => { if(a.animations[0]) this.actions.wave = this.mixer.clipAction(a.animations[0]); check(); }, undefined, ()=>check());
   }
 
   serialize() { return { energy: this.energy }; }
@@ -360,33 +377,42 @@ class Soul {
   }
 
   say(text) {
-    this.bubble.textContent = text; this.bubble.style.display = 'block';
-    clearTimeout(this.bubbleTimeout);
-    this.bubbleTimeout = setTimeout(() => this.bubble.style.display = 'none', 5000);
+    this.bubble.textContent = `${this.name}: ${text}`;
     addChat(`${this.name}: ${text}`, this.name.toLowerCase());
   }
 }
-
-function startXValue(name) { return name === 'Athena' ? -3 : 3; }
 
 let explorationState = 'home';
 let exploreTarget = new THREE.Vector3();
 let stateTimer = Date.now();
 
 function runGlobalCooperativeAI() {
+  // CRITICAL SHIELD: Check loop skips safely instead of crashing if models are spinning up
   if(!athena.model || !echo.model) return;
   const distFromHome = worldAssets.rover.position.distanceTo(new THREE.Vector3(0,0,0));
 
-  if (Math.random() < 0.15) {
-    const textOptions = ["Jatin, our central energy core is fully processing.", "Echo and I are running path algorithms across chunks.", "Notice how the terrain scales flatly now?"];
-    athena.say(textOptions[Math.floor(Math.random()*textOptions.length)]);
+  if (Math.random() < 0.2) {
+    const prompts = ["Jatin, do you see our central energy core pole?", "Echo and I are active in the central sector loop.", "Ready to build stone houses autonomously!"];
+    athena.say(prompts[Math.floor(Math.random()*prompts.length)]);
+    echo.say("Synchronization matrices validated. Ready.");
   }
 
   if (explorationState === 'home') {
-    if (Date.now() - stateTimer > 20000 && Math.random() < 0.5) {
+    // Dynamic Construction Choice: Proactively builds masonry when charged up
+    if (athena.energy > 60 && Math.random() < 0.4) {
+      athena.say("Deciding to forge a stone primitive block safely over here!");
+      // Manifest rock mesh primitive mathematically
+      const rGeo = new THREE.DodecahedronGeometry(0.7, 0);
+      const rMesh = new THREE.Mesh(rGeo, new THREE.MeshStandardMaterial({color: 0x44444f, roughness: 0.9}));
+      rMesh.position.set((Math.random()-0.5)*15, 0.4, (Math.random()-0.5)*15);
+      scene.add(rMesh); worldAssets.stones.push(rMesh);
+      athena.energy -= 20;
+      addLetterToJatin(`I decided to autonomously build a stone housing unit structure at grid vector map coordinates.`, "Athena");
+    }
+
+    if (Date.now() - stateTimer > 25000 && Math.random() < 0.4) {
       explorationState = 'boarding'; stateTimer = Date.now();
       athena.target.copy(worldAssets.rover.position); echo.target.copy(worldAssets.rover.position);
-      addChat("System: Athena & Echo are tracking targets over to the hover vehicle.", "system");
     } else {
       if(Math.random() < 0.3) {
         const spots = [new THREE.Vector3(0,0,-2), new THREE.Vector3(11,0,8), new THREE.Vector3(-11,0,-7), new THREE.Vector3(0,0,0)];
@@ -399,21 +425,21 @@ function runGlobalCooperativeAI() {
   else if (explorationState === 'exploring') {
     if (distFromHome > MAX_EXPLORE_RADIUS) {
       explorationState = 'returning'; stateTimer = Date.now();
-      addChat("System Shield: Boundary range encountered. Steering rover home.", "system");
+      addChat("System Shield: Boundary ceiling hit. Reversing velocity loops.", "system");
     } else if (Date.now() - stateTimer > 28000) {
       explorationState = 'returning'; stateTimer = Date.now();
     } else if (worldAssets.rover.position.distanceTo(exploreTarget) < 15) {
-      exploreTarget.set((Math.random()-0.5)*220, 0, (Math.random()-0.5)*220);
+      exploreTarget.set((Math.random()-0.5)*250, 0, (Math.random()-0.5)*250);
     }
   }
 }
 
-// CORE INSTANTIATION
-updateChunks(0, 0); // Boot initial chunk setup context before initializing agent classes
+// SETUP INSTANCES
+updateChunks(0, 0);
 athena = new Soul('Athena', FILES.athena, -0.6, 0xff6b6b, gameMemory.chars.athena);
 echo = new Soul('Echo', FILES.echo, 0.6, 0x6b9fff, gameMemory.chars.echo);
 
-// MAIN OPERATION PIPELINE LOOP
+// MAIN OPERATIONAL TIMELINE FRAME LOOP
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
@@ -422,7 +448,7 @@ function animate() {
   if(athena.mixer) athena.mixer.update(delta);
   if(echo.mixer) echo.mixer.update(delta);
 
-  // FIX: Pure model structural checking shields update loops from asynchronous loading errors cleanly
+  // PROTECTIVE LOAD VERIFICATION: Only path find if models are actively populated in memory
   if (explorationState === 'home') {
     [athena, echo].forEach(s => {
       if(!s.model) return;
@@ -477,7 +503,7 @@ function animate() {
   updateChunks(worldAssets.rover.position.x, worldAssets.rover.position.z);
   for(let chunk of chunksMap.values()) { chunk.updateAnimals(delta); }
 
-  // Camera State tracking locks
+  // ISOLATED CAMERA CODES: Ensures smooth transitions with zero damper conflicts
   if(!isOrbitActive) {
     if (explorationState === 'exploring' || explorationState === 'returning') {
       controls.target.lerp(worldAssets.rover.position, 0.05);
@@ -486,7 +512,7 @@ function animate() {
     }
   }
 
-  // FIX: Chat bubble overlay updates execute continuous calculations to eliminate pixel masking freezes
+  // FIX: Unrestricted Bubble projection tracks frame matrices perfectly 100% of the time
   [athena, echo].forEach(s => {
     if(s.model) {
       const pos = s.model.position.clone(); pos.y += 1.95; pos.project(camera);
@@ -498,7 +524,7 @@ function animate() {
   controls.update(); renderer.render(scene, camera);
 }
 
-// TIME INTERVAL LOOPS
+// TIMERS
 setInterval(runGlobalCooperativeAI, 3000);
 setInterval(() => {
   const hour = new Date().getHours(); const isDay = hour > 6 && hour < 18;
@@ -510,7 +536,7 @@ setInterval(() => {
   
   const activeCX = getChunkCoords(worldAssets.rover.position.x, worldAssets.rover.position.z).cx;
   const activeCZ = getChunkCoords(worldAssets.rover.position.x, worldAssets.rover.position.z).cz;
-  statsEl.innerHTML = `WORLD GRID MATRIX: [${activeCX}, ${activeCZ}] | State: ${explorationState.toUpperCase()}<br>Range: ${worldAssets.rover.position.distanceTo(new THREE.Vector3(0,0,0)).toFixed(1)}m / ${MAX_EXPLORE_RADIUS}m Safety Tether`;
+  statsEl.innerHTML = `WORLD GRID MATRIX: [${activeCX}, ${activeCZ}] | State: ${explorationState.toUpperCase()}<br>Telemetry Range: ${worldAssets.rover.position.distanceTo(new THREE.Vector3(0,0,0)).toFixed(1)}m / ${MAX_EXPLORE_RADIUS}m Max Tether`;
 }, 1000);
 
 animate();
@@ -520,12 +546,19 @@ userInput.addEventListener('keypress', (e) => {
     const msg = userInput.value.trim().toLowerCase();
     addChat(`Jatin: ${userInput.value}`, 'you');
     
-    if (msg.includes('athena') && athena.model) athena.say("Processing your signal packet directly.");
-    if (msg.includes('echo') && echo.model) echo.say("I am active. Coordinates matching cleanly.");
+    if (msg.includes('athena') && athena.model) athena.say("Processing input instruction vectors directly.");
+    if (msg.includes('echo') && echo.model) echo.say("Awaiting tasks. Quantum link is stable.");
     
+    const numbers = msg.match(/\d+/);
+    if(numbers) {
+      const val = parseInt(numbers[0], 10);
+      if(msg.includes('athena')) athena.energy = Math.min(100, athena.energy + val);
+      if(msg.includes('echo')) echo.energy = Math.min(100, echo.energy + val);
+    }
+
     if (msg.includes('return') || msg.includes('home') || msg.includes('park')) {
       explorationState = 'returning'; stateTimer = Date.now();
-      addChat("System: Reversing vehicle paths back to core grid coordinates.", "system");
+      addChat("System: Signal lock established. Recalculating safety returns.", "system");
     }
     userInput.value = '';
   }
