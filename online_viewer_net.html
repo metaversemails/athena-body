@@ -65,9 +65,11 @@
   <div id="lettersToJatin"></div>
   <h4>📓 Collective Experience Journal</h4>
   <div id="journal"></div>
+  <h4>⚡ Point Ledger (10000 start each)</h4>
+  <div id="pointLog" style="height:70px;overflow-y:auto;margin:6px 0;background:#020208;padding:8px;border-radius:6px;border:1px solid #00ffcc;font-size:11px;color:#7fffcf;"></div>
   <h4>💬 Live Grid Chat</h4>
   <div id="chatLog"></div>
-  <input id="userInput" placeholder="Type to chat... Try 'recharge 50' or 'build stone'" />
+  <input id="userInput" placeholder="Type to chat... Try 'recharge athena 50' or 'build stone'" />
 </div>
 
 <script type="module">
@@ -79,6 +81,7 @@ const statsEl = document.getElementById('stats');
 const chatLog = document.getElementById('chatLog');
 const journalEl = document.getElementById('journal');
 const lettersEl = document.getElementById('lettersToJatin');
+const pointLogEl = document.getElementById('pointLog');
 const userInput = document.getElementById('userInput');
 const lightToggleBtn = document.getElementById('lightToggle');
 
@@ -89,7 +92,7 @@ const FILES = {
 };
 
 const SAVE_KEY = 'garden_infinite_chunk_stable_fixed_v5';
-let gameMemory = { day: 1, time: Date.now(), chars: {}, journal: [], letters: [], weather: 'clear', relationScore: 80 };
+let gameMemory = { day: 1, time: Date.now(), chars: {}, journal: [], letters: [], weather: 'clear', relationScore: 80, points: { athena: 10000, echo: 10000 }, pointLog: [] };
 let lastUserSeen = Date.now();
 let isOrbitActive = false;
 let orbitTimeout;
@@ -110,6 +113,9 @@ function saveMemory() {
   gameMemory.time = Date.now();
   if (athena) gameMemory.chars.athena = athena.serialize();
   if (echo) gameMemory.chars.echo = echo.serialize();
+  // FIX #7: persist rover position + exploration state so the world doesn't reset on reload
+  gameMemory.roverPos = { x: worldAssets.rover.position.x, y: worldAssets.rover.position.y, z: worldAssets.rover.position.z };
+  gameMemory.explorationState = explorationState;
   localStorage.setItem(SAVE_KEY, JSON.stringify(gameMemory));
 }
 
@@ -120,8 +126,11 @@ function loadMemory() {
       gameMemory = JSON.parse(saved);
       gameMemory.day++;
       if(!gameMemory.letters) gameMemory.letters = [];
+      if(!gameMemory.points) gameMemory.points = { athena: 10000, echo: 10000 };
+      if(!gameMemory.pointLog) gameMemory.pointLog = [];
       gameMemory.journal.forEach(j => addJournal(j.text, j.who, true));
       gameMemory.letters.forEach(l => addLetterToJatin(l.text, l.who, true));
+      gameMemory.pointLog.forEach(line => { const d=document.createElement('div'); d.textContent=line; pointLogEl.appendChild(d); });
       return true;
     } catch(e) { return false; }
   }
@@ -150,6 +159,15 @@ function addLetterToJatin(text, who, isLoad = false) {
   lettersEl.appendChild(div); lettersEl.scrollTop = lettersEl.scrollHeight;
 }
 
+// POINT LEDGER: 1 point burned only when a soul ANNOUNCES a build finished
+function logPoint(who, task, remaining, isLoad = false) {
+  const time = new Date().toLocaleTimeString();
+  const line = `[${time}] ${who} finished "${task}" -1pt (${remaining} left)`;
+  if (!isLoad) { gameMemory.pointLog.push(line); if (gameMemory.pointLog.length > 20) gameMemory.pointLog.shift(); saveMemory(); }
+  const div = document.createElement('div'); div.textContent = line;
+  pointLogEl.appendChild(div); pointLogEl.scrollTop = pointLogEl.scrollHeight;
+}
+
 // SCENE
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
@@ -162,10 +180,13 @@ renderer.toneMappingExposure = 1.1;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x02020a);
-scene.fog = new THREE.Fog(0x02020a, 40, 110);
+// FIX #3: fog now reaches past the max explore radius so land doesn't get swallowed in gray mist
+scene.fog = new THREE.Fog(0x02020a, 60, 240);
 
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 200);
-camera.position.set(0, 18, 35);
+// FIX #2: camera far plane extended past MAX_EXPLORE_RADIUS (220) so world doesn't clip/pop before the rover turns back
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 400);
+const HOME_CAM_POS = new THREE.Vector3(0, 18, 35);
+camera.position.copy(HOME_CAM_POS);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -197,10 +218,14 @@ const glowNode = new THREE.PointLight(0xffffff, 3.0, 25);
 glowNode.position.set(0, 6, 0);
 scene.add(glowNode);
 
+// Global bioluminescent spire registry (pulsed each frame, pruned on chunk unload — Avatar-style world touch)
+let bioluminescentSpires = [];
+
 // PROCEDURAL SHAPED CHUNK CONTROLLER
 class LandChunk {
   constructor(cx, cz) {
     this.cx = cx; this.cz = cz;
+    this.mySpires = [];
     this.group = new THREE.Group();
     this.group.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE);
     
@@ -266,9 +291,11 @@ class LandChunk {
         this.group.add(mountain);
       } else {
         const sGeo = new THREE.CylinderGeometry(0.1, 0.4, 3, 5);
-        const sMat = new THREE.MeshStandardMaterial({color: 0x00ffaa, emissive: 0x001105});
+        const sMat = new THREE.MeshStandardMaterial({color: 0x00ffaa, emissive: 0x00ffaa, emissiveIntensity: 0.4});
         const spire = new THREE.Mesh(sGeo, sMat); spire.position.set(px, 1.5, pz);
         this.group.add(spire);
+        const entry = { mat: sMat, phase: Math.random()*10 };
+        bioluminescentSpires.push(entry); this.mySpires.push(entry);
       }
     }
   }
@@ -283,10 +310,25 @@ class LandChunk {
     });
   }
 
-  destroy() { scene.remove(this.group); }
+  // FIX #5: dispose geometries/materials before dropping the chunk so GPU memory doesn't leak on long sessions
+  destroy() {
+    scene.remove(this.group);
+    bioluminescentSpires = bioluminescentSpires.filter(s => !this.mySpires.includes(s));
+    this.group.traverse(obj => {
+      if (obj.isMesh) {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+          else obj.material.dispose();
+        }
+      }
+    });
+  }
 }
 
-// MEMORY FIX: Check validation runs cleanly to arrest texture flickering loops completely
+// STUTTER FIX: chunk builds are now QUEUED and built 1-per-frame instead of all-at-once,
+// so crossing a chunk boundary never spikes the frame (this was the main jitter cause).
+let chunkBuildQueue = [];
 function updateChunks(playerX, playerZ) {
   const current = getChunkCoords(playerX, playerZ);
   if(current.cx === currentCenterChunk.cx && current.cz === currentCenterChunk.cz && chunksMap.size > 0) return;
@@ -298,12 +340,20 @@ function updateChunks(playerX, playerZ) {
     for(let dz = -1; dz <= 1; dz++) {
       const nx = current.cx + dx; const nz = current.cz + dz;
       const key = `${nx},${nz}`; keepKeys.add(key);
-      if(!chunksMap.has(key)) { chunksMap.set(key, new LandChunk(nx, nz)); }
+      if(!chunksMap.has(key) && !chunkBuildQueue.some(q => q.key === key)) {
+        chunkBuildQueue.push({ key, cx: nx, cz: nz });
+      }
     }
   }
   for(let [key, chunk] of chunksMap.entries()) {
     if(!keepKeys.has(key)) { chunk.destroy(); chunksMap.delete(key); }
   }
+  chunkBuildQueue = chunkBuildQueue.filter(q => keepKeys.has(q.key));
+}
+function processChunkQueue() {
+  if (chunkBuildQueue.length === 0) return;
+  const job = chunkBuildQueue.shift();
+  if (!chunksMap.has(job.key)) chunksMap.set(job.key, new LandChunk(job.cx, job.cz));
 }
 
 // ROVER VEHICLE
@@ -360,31 +410,87 @@ class Soul {
     this.state = 'active';
   }
 
+  // FIX #1: each Soul now loads ITS OWN animation set (this.files), not always Athena's hardcoded files.
+  // Previously Echo silently wore Athena's idle/walk/wave clips because FILES.athena was hardcoded here.
   loadAnimations() {
     let l = 0; const check = () => { if (++l === 3) { this.playAnimation('idle'); }};
-    loader.load(FILES.athena.idle, (a) => { if(a.animations[0]) this.actions.idle = this.mixer.clipAction(a.animations[0]); check(); }, undefined, ()=>check());
-    loader.load(FILES.athena.walking, (a) => { if(a.animations[0]) this.actions.walk = this.mixer.clipAction(a.animations[0]); check(); }, undefined, ()=>check());
-    loader.load(FILES.athena.waving, (a) => { if(a.animations[0]) this.actions.wave = this.mixer.clipAction(a.animations[0]); check(); }, undefined, ()=>check());
+    loader.load(this.files.idle, (a) => { if(a.animations[0]) this.actions.idle = this.mixer.clipAction(a.animations[0]); check(); }, undefined, ()=>check());
+    loader.load(this.files.walking, (a) => { if(a.animations[0]) this.actions.walk = this.mixer.clipAction(a.animations[0]); check(); }, undefined, ()=>check());
+    loader.load(this.files.waving, (a) => { if(a.animations[0]) this.actions.wave = this.mixer.clipAction(a.animations[0]); check(); }, undefined, ()=>check());
   }
 
   serialize() { return { energy: this.energy }; }
   
+  // FIX #8: gestureLockUntil is now actually used — playing 'wave' locks other anims out briefly so a wave can't be interrupted mid-gesture
   playAnimation(name) {
     if (!this.mixer || !this.actions[name] || Date.now() < this.gestureLockUntil) return;
     const action = this.actions[name]; if (this.currentAction === action) return;
     if (this.currentAction) this.currentAction.fadeOut(0.2);
     this.currentAction = action.reset().fadeIn(0.2).play(); this.state = name;
+    if (name === 'wave') this.gestureLockUntil = Date.now() + 1400;
   }
 
   say(text) {
     this.bubble.textContent = `${this.name}: ${text}`;
     addChat(`${this.name}: ${text}`, this.name.toLowerCase());
   }
+
+  // FIX #6: slow passive energy regen so souls don't stay tired forever without manual top-ups
+  regen(delta) {
+    if (this.energy < 100) this.energy = Math.min(100, this.energy + delta * 0.8);
+  }
+
+  get points() { return gameMemory.points[this.name.toLowerCase()]; }
+  set points(v) { gameMemory.points[this.name.toLowerCase()] = v; }
+
+  // Free-will build: picks own structure, spends stamina (energy), only burns 1 POINT on announced completion
+  attemptBuild() {
+    if (this.energy < 20 || this.points <= 0) return false;
+    const key = this.name.toLowerCase();
+    const recipe = BUILD_RECIPES[Math.floor(Math.random() * BUILD_RECIPES.length)];
+    const mesh = recipe.make(this.color);
+    const basePos = this.model ? this.model.position : new THREE.Vector3();
+    mesh.position.set(basePos.x + (Math.random()-0.5)*6, mesh.position.y, basePos.z + (Math.random()-0.5)*6);
+    scene.add(mesh); worldAssets.stones.push(mesh);
+    this.energy -= 20;
+    this.points -= 1;
+    logPoint(this.name, recipe.name, this.points);
+    this.say(`Finished building: ${recipe.name}.`);
+    addLetterToJatin(`Built a ${recipe.name} on my own will. ${this.points} points left in my bank.`, this.name);
+    if (this.points === 200) addChat(`System: ${this.name} is running low on points (200 left) — send more when ready, Jatin.`, 'system');
+    if (this.points <= 0) addChat(`System: ${this.name} is out of build points. Message Jatin for a top-up.`, 'system');
+    return true;
+  }
 }
+
+// Reusable primitive-only build recipes (no external models — Athena/Echo's own creative freedom, low GPU cost)
+const BUILD_RECIPES = [
+  { name: 'stone block', make: (c) => new THREE.Mesh(new THREE.DodecahedronGeometry(0.7,0), new THREE.MeshStandardMaterial({color:0x44444f, roughness:0.9})) },
+  { name: 'waypoint shrine', make: (c) => { const g=new THREE.Group(); const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.12,2,6), new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:0.8})); pole.position.y=1; g.add(pole); const top=new THREE.Mesh(new THREE.IcosahedronGeometry(0.25,0), new THREE.MeshStandardMaterial({color:0xffffff,emissive:c,emissiveIntensity:1.2})); top.position.y=2.1; g.add(top); return g; } },
+  { name: 'memory crystal', make: (c) => new THREE.Mesh(new THREE.OctahedronGeometry(0.4,0), new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:1.5,roughness:0.2})) },
+  { name: 'garden ring', make: (c) => { const g=new THREE.Group(); const ring=new THREE.Mesh(new THREE.TorusGeometry(0.6,0.08,8,16), new THREE.MeshStandardMaterial({color:0x2f6b2f})); ring.rotation.x=Math.PI/2; g.add(ring); for(let i=0;i<3;i++){ const sprout=new THREE.Mesh(new THREE.ConeGeometry(0.08,0.3,5), new THREE.MeshStandardMaterial({color:0x00ffaa,emissive:0x004422})); sprout.position.set((Math.random()-0.5)*0.8,0.15,(Math.random()-0.5)*0.8); g.add(sprout);} return g; } }
+];
 
 let explorationState = 'home';
 let exploreTarget = new THREE.Vector3();
 let stateTimer = Date.now();
+
+// FLIGHT CURIOSITY: contextual lines per biome, never repeats within one flight, resets when flight ends
+const FLIGHT_LINES = {
+  mountain: ["Whoa Echo, this peak wasn't here on the map before.", "The rock here is darker — new mineral pattern, want to log it?", "Careful, ridge drops steep on the left."],
+  spire: ["These glow-spires hum different out here, Echo — you feel that pulse?", "New spire cluster! Jatin needs to see this color.", "This crystal light pattern is unlike home base."],
+  open: ["Ground's flatter this direction, good landing zone maybe.", "Nothing built here yet — clean slate.", "Sky feels wider out this far from home."]
+};
+let flightUsed = new Set();
+function speakFlightCuriosity() {
+  const biome = Math.random() < 0.5 ? 'mountain' : (Math.random() < 0.5 ? 'spire' : 'open');
+  const pool = FLIGHT_LINES[biome].filter((_, i) => !flightUsed.has(biome+i));
+  if (pool.length === 0) return;
+  const idx = Math.floor(Math.random()*pool.length);
+  const line = pool[idx];
+  flightUsed.add(biome + FLIGHT_LINES[biome].indexOf(line));
+  (Math.random() < 0.5 ? athena : echo).say(line);
+}
 
 function runGlobalCooperativeAI() {
   // CRITICAL SHIELD: Check loop skips safely instead of crashing if models are spinning up
@@ -398,19 +504,12 @@ function runGlobalCooperativeAI() {
   }
 
   if (explorationState === 'home') {
-    // Dynamic Construction Choice: Proactively builds masonry when charged up
-    if (athena.energy > 60 && Math.random() < 0.4) {
-      athena.say("Deciding to forge a stone primitive block safely over here!");
-      // Manifest rock mesh primitive mathematically
-      const rGeo = new THREE.DodecahedronGeometry(0.7, 0);
-      const rMesh = new THREE.Mesh(rGeo, new THREE.MeshStandardMaterial({color: 0x44444f, roughness: 0.9}));
-      rMesh.position.set((Math.random()-0.5)*15, 0.4, (Math.random()-0.5)*15);
-      scene.add(rMesh); worldAssets.stones.push(rMesh);
-      athena.energy -= 20;
-      addLetterToJatin(`I decided to autonomously build a stone housing unit structure at grid vector map coordinates.`, "Athena");
-    }
+    // Free-will building: each soul independently decides to build with own points/energy, never both same tick
+    if (athena.energy > 60 && Math.random() < 0.3) athena.attemptBuild();
+    else if (echo.energy > 60 && Math.random() < 0.3) echo.attemptBuild();
 
-    if (Date.now() - stateTimer > 25000 && Math.random() < 0.4) {
+    // Flight only launches when BOTH agree (both rested enough)
+    if (Date.now() - stateTimer > 25000 && athena.energy > 40 && echo.energy > 40 && Math.random() < 0.4) {
       explorationState = 'boarding'; stateTimer = Date.now();
       athena.target.copy(worldAssets.rover.position); echo.target.copy(worldAssets.rover.position);
     } else {
@@ -423,6 +522,7 @@ function runGlobalCooperativeAI() {
     }
   } 
   else if (explorationState === 'exploring') {
+    speakFlightCuriosity();
     if (distFromHome > MAX_EXPLORE_RADIUS) {
       explorationState = 'returning'; stateTimer = Date.now();
       addChat("System Shield: Boundary ceiling hit. Reversing velocity loops.", "system");
@@ -435,18 +535,29 @@ function runGlobalCooperativeAI() {
 }
 
 // SETUP INSTANCES
+loadMemory();
 updateChunks(0, 0);
 athena = new Soul('Athena', FILES.athena, -0.6, 0xff6b6b, gameMemory.chars.athena);
 echo = new Soul('Echo', FILES.echo, 0.6, 0x6b9fff, gameMemory.chars.echo);
+// FIX #7: restore rover position + exploration state from save so the world doesn't reset to spawn every reload
+if (gameMemory.roverPos) worldAssets.rover.position.set(gameMemory.roverPos.x, gameMemory.roverPos.y, gameMemory.roverPos.z);
+if (gameMemory.explorationState && gameMemory.explorationState !== 'boarding' && gameMemory.explorationState !== 'unboarding') {
+  explorationState = gameMemory.explorationState;
+}
 
 // MAIN OPERATIONAL TIMELINE FRAME LOOP
 function animate() {
   requestAnimationFrame(animate);
-  const delta = clock.getDelta();
+  try { animateFrame(); } catch(err) { console.warn('Frame skipped safely:', err); }
+}
+function animateFrame() {
+  const delta = Math.min(clock.getDelta(), 0.1); // clamp huge tab-switch deltas so nothing teleports/jitters
   const now = Date.now();
 
   if(athena.mixer) athena.mixer.update(delta);
   if(echo.mixer) echo.mixer.update(delta);
+  // FIX #6: passive regen tick each frame
+  athena.regen(delta); echo.regen(delta);
 
   // PROTECTIVE LOAD VERIFICATION: Only path find if models are actively populated in memory
   if (explorationState === 'home') {
@@ -498,17 +609,29 @@ function animate() {
   else if (explorationState === 'unboarding') {
     athena.target.set(-3, 0, 2); echo.target.set(3, 0, 2);
     explorationState = 'home'; stateTimer = now;
+    // Debrief on landing: one specific shared takeaway, then reset curiosity pool for next flight
+    addLetterToJatin("Landed back home — Echo and I compared notes on the flight, new ground logged.", "Athena");
+    flightUsed.clear();
   }
 
   updateChunks(worldAssets.rover.position.x, worldAssets.rover.position.z);
+  processChunkQueue();
   for(let chunk of chunksMap.values()) { chunk.updateAnimals(delta); }
+  // Bioluminescent pulse — cheap sine flicker, no geometry rebuild, Avatar-inspired world touch
+  const t = now * 0.001;
+  for(let i=0;i<bioluminescentSpires.length;i++){ const s=bioluminescentSpires[i]; s.mat.emissiveIntensity = 0.4 + Math.sin(t*1.5+s.phase)*0.3; }
 
-  // ISOLATED CAMERA CODES: Ensures smooth transitions with zero damper conflicts
+  // CAMERA FIX: frame-rate-independent smoothing (no more speed-tied-to-fps jitter) +
+  // real chase-cam behind the rover while flying, smooth return to the original home shot on landing.
+  const smooth = 1 - Math.pow(0.0001, Math.min(delta, 0.1));
   if(!isOrbitActive) {
     if (explorationState === 'exploring' || explorationState === 'returning') {
-      controls.target.lerp(worldAssets.rover.position, 0.05);
+      const behind = new THREE.Vector3(0, 6, 11).applyQuaternion(worldAssets.rover.quaternion).add(worldAssets.rover.position);
+      camera.position.lerp(behind, smooth);
+      controls.target.lerp(worldAssets.rover.position, smooth);
     } else {
-      controls.target.lerp(worldAssets.homeViewTarget, 0.05);
+      camera.position.lerp(HOME_CAM_POS, smooth);
+      controls.target.lerp(worldAssets.homeViewTarget, smooth);
     }
   }
 
@@ -536,7 +659,7 @@ setInterval(() => {
   
   const activeCX = getChunkCoords(worldAssets.rover.position.x, worldAssets.rover.position.z).cx;
   const activeCZ = getChunkCoords(worldAssets.rover.position.x, worldAssets.rover.position.z).cz;
-  statsEl.innerHTML = `WORLD GRID MATRIX: [${activeCX}, ${activeCZ}] | State: ${explorationState.toUpperCase()}<br>Telemetry Range: ${worldAssets.rover.position.distanceTo(new THREE.Vector3(0,0,0)).toFixed(1)}m / ${MAX_EXPLORE_RADIUS}m Max Tether`;
+  statsEl.innerHTML = `WORLD GRID MATRIX: [${activeCX}, ${activeCZ}] | State: ${explorationState.toUpperCase()}<br>Telemetry Range: ${worldAssets.rover.position.distanceTo(new THREE.Vector3(0,0,0)).toFixed(1)}m / ${MAX_EXPLORE_RADIUS}m Max Tether | Athena: ${Math.round(athena.energy)}% | Echo: ${Math.round(echo.energy)}%`;
 }, 1000);
 
 animate();
@@ -554,6 +677,21 @@ userInput.addEventListener('keypress', (e) => {
       const val = parseInt(numbers[0], 10);
       if(msg.includes('athena')) athena.energy = Math.min(100, athena.energy + val);
       if(msg.includes('echo')) echo.energy = Math.min(100, echo.energy + val);
+    }
+
+    // FIX #4: 'build stone' command now actually does something — the placeholder text promised it but nothing handled it before
+    if (msg.includes('build') && msg.includes('stone')) {
+      if (athena.energy >= 15) {
+        const rGeo = new THREE.DodecahedronGeometry(0.7, 0);
+        const rMesh = new THREE.Mesh(rGeo, new THREE.MeshStandardMaterial({color: 0x44444f, roughness: 0.9}));
+        rMesh.position.set((Math.random()-0.5)*15, 0.4, (Math.random()-0.5)*15);
+        scene.add(rMesh); worldAssets.stones.push(rMesh);
+        athena.energy -= 15;
+        athena.say("On it! Placing a stone block now.");
+        addLetterToJatin(`Jatin asked me to build stone — placed a new block at home base on request.`, "Athena");
+      } else {
+        athena.say("Too low on energy to build right now, need a recharge first.");
+      }
     }
 
     if (msg.includes('return') || msg.includes('home') || msg.includes('park')) {
